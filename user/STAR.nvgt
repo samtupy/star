@@ -6,9 +6,17 @@ void main() {
 	int flags;
 	ws.send_frame("""{"user": 1}""");
 	alert("test", ws.receive_frame(flags));
-	ws.send_frame("""{"user": 1, "request": ["Alex: this is a test!", "David: Does this work?", "Zira: Yes it apparently does!"]}""");
+	string raw_input = file_get_contents("input.txt");
+	if (raw_input.empty()) exit();
+	string[] lines = raw_input.split("\r\n", false);
+	json_array lines_array;
+	for(uint i = 0; i < lines.length(); i++) lines_array.add(lines[i]);
+	json_object request;
+	request["user"] = 1;
+	request["request"] = lines_array;
+	ws.send_frame(request.stringify());
 	dictionary results;
-	for (uint i = 0; i < 3; i++) {
+	for (uint i = 0; i < lines.length(); i++) {
 		string frame = ws.receive_frame(flags);
 		json_object@ r = parse_json(frame);
 		if (r.exists("data")) {
@@ -17,12 +25,12 @@ void main() {
 		} else alert("test", frame);
 	}
 	ws.shutdown();
-	for (int i = 1; i <= 3; i++) {
-			file_put_contents("tmp.wav", string(results[i]));
+	if (!directory_exists("output")) directory_create("output");
+	for (int i = 0; i < lines.length(); i++) {
+			file_put_contents("output/" + (i + 1) + ".wav", string(results[i + 1]));
 			sound s;
-			s.load("tmp.wav");
+			s.load("output/" + (i + 1) + ".wav");
 			s.play_wait();
 			s.close();
-			file_delete("tmp.wav");
 	}
 }

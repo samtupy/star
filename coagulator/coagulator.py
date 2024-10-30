@@ -36,7 +36,7 @@ def handle_speech_request(client, server, request):
 	for line in request:
 		raw_meta, part, text = line.partition(": ")
 		if not text.strip():
-			server.send_message(client, json.dumps({"warning": "no text found in line {line}"}))
+			server.send_message(client, json.dumps({"warning": f"no text found in line {line}"}))
 			continue
 		meta = parse_speech_meta(raw_meta)
 		if not "voice" in meta:
