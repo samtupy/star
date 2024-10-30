@@ -1,0 +1,28 @@
+void main() {
+	http_client cl("127.0.0.1", 7774);
+	http_request req(HTTP_GET, "/");
+	http_response resp;
+	web_socket ws(cl, req, resp);
+	int flags;
+	ws.send_frame("""{"user": 1}""");
+	alert("test", ws.receive_frame(flags));
+	ws.send_frame("""{"user": 1, "request": ["Alex: this is a test!", "David: Does this work?", "Zira: Yes it apparently does!"]}""");
+	dictionary results;
+	for (uint i = 0; i < 3; i++) {
+		string frame = ws.receive_frame(flags);
+		json_object@ r = parse_json(frame);
+		if (r.exists("data")) {
+			string wav = string_base64_decode(r["data"]);
+			results.set(string(r["speech"]).split("_")[1], wav);
+		} else alert("test", frame);
+	}
+	ws.shutdown();
+	for (int i = 1; i <= 3; i++) {
+			file_put_contents("tmp.wav", string(results[i]));
+			sound s;
+			s.load("tmp.wav");
+			s.play_wait();
+			s.close();
+			file_delete("tmp.wav");
+	}
+}
