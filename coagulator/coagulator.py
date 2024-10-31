@@ -22,6 +22,7 @@ def parse_speech_meta(meta):
 			if p[0] == "r": result["rate"] = float(p[1])
 			elif p[0] == "p": result["pitch"] = float(p[1])
 		except ValueError: continue
+	return result
 
 def find_provider_for_voice(voice):
 	"""Searches the list of voices for a provider to send a speech request to given a voice name."""
