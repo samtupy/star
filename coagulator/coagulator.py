@@ -70,7 +70,7 @@ def on_message(client, server, message):
 		if msg["user"] < g.user_rev:
 			server.send_message(client, json.dumps({"error", f"must be revision {g.user_rev} or higher"}))
 			return
-		if "request" in msg: handle_speech_request(client, server, msg["request"], str(msg["id"]) if "id" in msg else :"")
+		if "request" in msg: handle_speech_request(client, server, msg["request"], str(msg["id"]) if "id" in msg else "")
 		else: server.send_message(client, json.dumps({"voices": list(g.voices)}))
 	elif "speech" in msg and msg["speech"] in g.speech_requests and "data" in msg:
 		server.send_message(g.speech_requests[msg["speech"]], message)
