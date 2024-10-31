@@ -1,0 +1,36 @@
+void main() {
+	http_client cl("samtupy.com", 7774);
+	http_request req(HTTP_GET, "/");
+	http_response resp;
+	web_socket ws(cl, req, resp);
+	int flags;
+	ws.send_frame("""{"user": 1}""");
+	alert("test", ws.receive_frame(flags));
+	string raw_input = file_get_contents("input.txt");
+	if (raw_input.empty()) exit();
+	string[] lines = raw_input.split("\r\n", false);
+	json_array lines_array;
+	for(uint i = 0; i < lines.length(); i++) lines_array.add(lines[i]);
+	json_object request;
+	request["user"] = 1;
+	request["request"] = lines_array;
+	ws.send_frame(request.stringify());
+	dictionary results;
+	for (uint i = 0; i < lines.length(); i++) {
+		string frame = ws.receive_frame(flags);
+		json_object@ r = parse_json(frame);
+		if (r.exists("data")) {
+			string wav = string_base64_decode(r["data"]);
+			results.set(string(r["speech"]).split("_")[1], wav);
+		} else alert("test", frame);
+	}
+	ws.shutdown();
+	if (!directory_exists("output")) directory_create("output");
+	for (int i = 0; i < lines.length(); i++) {
+			file_put_contents("output/" + (i + 1) + ".wav", string(results[i + 1]));
+			sound s;
+			s.load("output/" + (i + 1) + ".wav");
+			s.play_wait();
+			s.close();
+	}
+}

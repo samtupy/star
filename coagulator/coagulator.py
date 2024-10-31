@@ -9,12 +9,12 @@ g.provider_rev = 1
 g.user_rev = 1
 
 def parse_speech_meta(meta):
-	"""Takes speech metadata such as "Sam" or "Sam<r=4,p=-2>" and returns a dictionary of parsed properties such as voice, rate and pitch."""
+	"""Takes speech metadata such as "Sam" or "Sam<r=4 p=-2>" and returns a dictionary of parsed properties such as voice, rate and pitch."""
 	if meta.find("<") < 0: return {"voice": meta}
 	voice, part, params = meta.partition("<")
 	result = {"voice": voice}
 	params = params[:-1]
-	params = params.split(",")
+	params = params.split(" ")
 	for p in params:
 		try:
 			p = p.strip().split("=")
@@ -29,9 +29,10 @@ def find_provider_for_voice(voice):
 		if re.search(r"\b" + voice + r"\b", v): return (v, random.choice(g.voices[v]))
 	return (voice, None)
 
-def handle_speech_request(client, server, request):
+def handle_speech_request(client, server, request, id):
 	"""Receives a list of requests such as ["Sam: hello", "Alex<p=4>: What's up!"] and dispatches each line to a voice provider for synthesis."""
-	if not "speech_sequence" in client: client["speech_sequence"] = 0
+	if not "speech_sequence" in client or id: client["speech_sequence"] = 0
+	if not id: id = "_" + id
 	if type(request) == str: request = [request]
 	for line in request:
 		raw_meta, part, text = line.partition(": ")
@@ -48,7 +49,7 @@ def handle_speech_request(client, server, request):
 			continue
 		client["speech_sequence"] += 1
 		meta["text"] = text
-		meta["id"] = f"{client['id']}_{client['speech_sequence']}"
+		meta["id"] = f"{client['id']}{id}_{client['speech_sequence']}"
 		server.send_message(provider, json.dumps(meta))
 		g.speech_requests[meta["id"]] = client
 
@@ -69,7 +70,7 @@ def on_message(client, server, message):
 		if msg["user"] < g.user_rev:
 			server.send_message(client, json.dumps({"error", f"must be revision {g.user_rev} or higher"}))
 			return
-		if "request" in msg: handle_speech_request(client, server, msg["request"])
+		if "request" in msg: handle_speech_request(client, server, msg["request"], str(msg["id"]) if "id" in msg else :"")
 		else: server.send_message(client, json.dumps({"voices": list(g.voices)}))
 	elif "speech" in msg and msg["speech"] in g.speech_requests and "data" in msg:
 		server.send_message(g.speech_requests[msg["speech"]], message)

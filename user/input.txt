@@ -1,6 +1,2 @@
-Alex: this is a test!,
-Fred: This is awesome!
-David: Does this work?
-Zira: Yes it apparently does!
-Agnes: The first ever tts script with the star program!
-Bad News: Can we use these?
+Alex: test on the mac
+David: Test of microsoft sam!

@@ -27,7 +27,7 @@ Until all lines passed have been synthesized.
 
 While the coagulator does act as a direct relay and thus providers could send data in any format it wants and could even include extra keys in the response, what's written here is the standard.
 
-The speech key is important. It contains an ID used to track the order of synthesis. It is made up of 2 numbers separated by an underscore. The first number usually isn't importaant, it's the integer client ID that you are known as by the coagulator. The second number however contains an integer that denotes the fragment number that this speech payload is referencing. When outputting data, you should number or sequence your output based on this second number.
+The speech key is important. It contains an ID used to track the order of synthesis. It is made up of 2 or at most 3 numbers separated by an underscore. The first number usually isn't importaant, it's the integer client ID that you are known as by the coagulator. If it exists, the second number contains any custom ID you have passed by providing an ID key in your request message. The final number however contains an integer that denotes the fragment number that this speech payload is referencing. When outputting data, you should number or sequence your output based on this second number.
 
 ### Writing a speech provider
 When a speech provider first connects to a coagulator, it should send a packet in the form:

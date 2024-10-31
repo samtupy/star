@@ -1,36 +1,118 @@
+#include "form.nvgt"
+
+json_object@[] message_queue;
+fast_mutex message_queue_mutex;
+atomic_bool program_exit = false;
+void enqueue_message(json_object@ msg) {
+	fast_mutex_lock scoped(message_queue_mutex);
+	message_queue.insert_last(msg);
+}
+json_object@ dequeue_message() {
+	fast_mutex_lock scoped(message_queue_mutex);
+	if (message_queue.length() < 1) return null;
+	json_object@ r = message_queue[0];
+	message_queue.remove_at(0);
+	return r;
+}
+
+web_socket@ ws;
+void socket_thread() {
+	json_object parse_fail;
+	parse_fail["error"] = "received invalid message from server";
+	try {
+		http_client cl("samtupy.com", 7774);
+		http_request req(HTTP_GET, "/");
+		http_response resp;
+		@ws = web_socket(cl, req, resp);
+		int flags;
+		ws.send_frame("""{"user": 1}""");
+		while(program_exit == false) {
+			string frame = ws.receive_frame(flags);
+			if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE or frame == "") {
+				ws.shutdown();
+				break;
+			} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
+				ws.send_frame("", WS_FRAME_OP_PONG);
+				continue;
+			}
+			json_object@ o;
+			try {
+			@o = parse_json(frame);
+			} catch { enqueue_message(parse_fail); }
+			enqueue_message(o);
+		}
+	} catch {
+		enqueue_message(null);
+	}
+}
+
+void send_request(const string&in text, int id) {
+	json_object result;
+	result["id"] = id;
+	result["user"] = 1;
+	string[]@ raw_lines = text.split("\r\n", false);
+	json_array lines;
+	for (uint i = 0; i < raw_lines.length(); i++) lines.add(raw_lines[i]);
+	result["request"] = lines;
+	ws.send_frame(result.stringify());
+}
+
+audio_form form;
+sound demo;
+int f_voices, f_script, f_render, f_exit;
+int render_ID = 0x7fff;
+int demo_ID = 0xffff;
 void main() {
-	http_client cl("127.0.0.1", 7774);
-	http_request req(HTTP_GET, "/");
-	http_response resp;
-	web_socket ws(cl, req, resp);
-	int flags;
-	ws.send_frame("""{"user": 1}""");
-	alert("test", ws.receive_frame(flags));
-	string raw_input = file_get_contents("input.txt");
-	if (raw_input.empty()) exit();
-	string[] lines = raw_input.split("\r\n", false);
-	json_array lines_array;
-	for(uint i = 0; i < lines.length(); i++) lines_array.add(lines[i]);
-	json_object request;
-	request["user"] = 1;
-	request["request"] = lines_array;
-	ws.send_frame(request.stringify());
-	dictionary results;
-	for (uint i = 0; i < lines.length(); i++) {
-		string frame = ws.receive_frame(flags);
-		json_object@ r = parse_json(frame);
-		if (r.exists("data")) {
-			string wav = string_base64_decode(r["data"]);
-			results.set(string(r["speech"]).split("_")[1], wav);
-		} else alert("test", frame);
+	async<void>(socket_thread);
+	show_window("STAR client");
+	form.create_window();
+	wait(200);
+	f_voices = form.create_list("available &voices");
+	f_script = form.create_input_box("enter &script", multiline:true);
+	f_render = form.create_button("&render to wav");
+	f_exit = form.create_button("e&xit", false, true);
+	form.focus(f_script);
+	while(!form.is_pressed(f_exit)) {
+		wait(5);
+		form.monitor();
+		json_object@ msg = dequeue_message();
+		if (@msg == null) continue;
+		if (msg.exists("voices")) {
+			play_sound("ready");
+			json_array@ v = msg["voices"];
+			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
+		} else if(msg.exists("speech")) {
+			string[]@ id_parts = string(msg["speech"]).split("_");
+			bool rendering = parse_int(id_parts[1]) == render_ID;
+			if (rendering) {
+				if (!directory_exists("output")) directory_create("output");
+				file_put_contents("output/" + id_parts[2] + ".wav", string_base64_decode(msg["data"]));
+			} else {
+				demo.close();
+				demo.push_memory(string_base64_decode(msg["data"]), true);
+				demo.play();
+			}
+		}
+		if (form.is_pressed(f_render)) {
+			const string text = form.get_text_reference(f_script);
+			send_request(text, demo_ID);
+		}
 	}
-	ws.shutdown();
-	if (!directory_exists("output")) directory_create("output");
-	for (int i = 0; i < lines.length(); i++) {
-			file_put_contents("output/" + (i + 1) + ".wav", string(results[i + 1]));
-			sound s;
-			s.load("output/" + (i + 1) + ".wav");
-			s.play_wait();
-			s.close();
+	program_exit = true;
+}
+
+sound@[] g_sounds;
+enum sound_flags { SOUND_LOOPING, SOUND_PAUSED }
+sound@ play_sound(const string&in filename, int64 flags = 0) {
+	sound s;
+	if (!s.load("audio/" + filename + ".ogg")) return null;
+	if (flags & SOUND_PAUSED == 0)
+		flags & SOUND_LOOPING > 0? s.play_looped() : s.play();
+	for (uint i = 0; i < g_sounds.length(); i++) {
+		if (g_sounds[i].playing or g_sounds[i].paused) continue;
+		g_sounds.remove_at(i);
+		i--;
 	}
+	g_sounds.insert_last(s);
+	return s;
 }
