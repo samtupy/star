@@ -63,7 +63,7 @@ void send_request(const string&in text, int id) {
 	result["user"] = 1;
 	string[]@ raw_lines = text.split("\r\n", false);
 	if (id == render_ID) {
-		render_count = raw_lines.length();
+		item_count = raw_lines.length();
 		form.set_caption(f_render, "Cancel");
 		play("begin");
 	}
@@ -92,6 +92,18 @@ void main() {
 	form.focus(f_script);
 	while(!form.is_pressed(f_exit)) {
 		wait(5);
+		if (form.get_current_focus() == f_script and (keyboard_modifiers & KEYMOD_CTRL) != 0) {
+			int dir = 0;
+			if (key_pressed(KEY_UP)) dir = -1;
+			else if (key_pressed(KEY_DOWN)) dir = 1;
+			if (dir != 0 and form.set_line(f_script, form.get_line_number(f_script) + dir)) {
+				const string text = form.get_text_reference(f_script);
+				int line_start = form.get_text_cursor(f_script);
+				int line_end;
+				for(line_end = line_start; line_end < text.length() and text[line_end] != "\n"; line_end++);
+				send_request(text.substr(line_start, line_end -line_start), demo_ID);
+			}
+		}
 		form.monitor();
 		if (form.is_pressed(f_render)) {
 			if (render_count > 0) {
@@ -109,7 +121,6 @@ void main() {
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
 		} else if(msg.exists("speech")) {
 			string[]@ id_parts = string(msg["speech"]).split("_");
-			speak(string(id_parts));
 			bool rendering = parse_int(id_parts[1]) == render_ID;
 			if (rendering) {
 				render_count++;
@@ -117,6 +128,7 @@ void main() {
 				else {
 					play("complete");
 					form.set_caption(f_render, "&Render to wav");
+					item_count = render_count = 0;
 				}
 				if (!directory_exists("output")) directory_create("output");
 				file_put_contents("output/" + id_parts[2] + ".wav", string_base64_decode(msg["data"]));
