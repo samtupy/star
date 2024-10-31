@@ -25,7 +25,7 @@ void socket_thread() {
 	json_object parse_fail;
 	parse_fail["error"] = "received invalid message from server";
 	try {
-		http_client cl(config.get_string("host", "127.0.0.1"), config.get_double("port", 7774));
+		http_client cl(config.get_string("", "host", "127.0.0.1"), config.get_double("", "port", 7774));
 		http_request req(HTTP_GET, "/");
 		http_response resp;
 		@ws = web_socket(cl, req, resp);
