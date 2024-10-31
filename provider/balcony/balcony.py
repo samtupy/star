@@ -17,7 +17,7 @@ raw = subprocess.run(["balcon", "-l"], shell = True, capture_output = True, text
 voices = []
 for v in raw:
 	if not v or not v.startswith(" "): continue
-	voices.append((v.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
+	voices.append((v.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
 
 def synthesize_to_wave(event):
 	for v in voices:
