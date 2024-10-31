@@ -20,10 +20,14 @@ for v in raw:
 	voices.append((v.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
 
 def synthesize_to_wave(event):
-	extra_args = ["-n", event["voice"], "-t", event["text"], "-o"]
-	if "rate" in event: extra_args += ["-s", event["rate"]]
-	if "pitch" in event: extra_args += ["-p", event["pitch"]]
-	return base64.b64encode(subprocess.run(["balcon"] + extra_args, shell = True, capture_output = True).stdout).decode("UTF8")
+	try:
+		extra_args = ["-n", event["voice"], "-t", event["text"], "-o"]
+		if "rate" in event: extra_args += ["-s", str(int(event["rate"]))]
+		if "pitch" in event: extra_args += ["-p", str(int(event["pitch"]))]
+		return base64.b64encode(subprocess.run(["balcon"] + extra_args, shell = True, capture_output = True).stdout).decode("UTF8")
+	except Exception as e:
+		print(e)
+		return ""
 
 
 # WebSocket handling
