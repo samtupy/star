@@ -1,6 +1,7 @@
 __pycache__
-provider/pyttsx/build
-provider/pyttsx/dist
+provider/balcony/*.exe
+provider/*/build
+provider/*/dist
 user/output
 user/STAR
 user/*.zip

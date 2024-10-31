@@ -18,7 +18,7 @@ def parse_speech_meta(meta):
 	for p in params:
 		try:
 			p = p.strip().split("=")
-			if len("p") < 2: continue
+			if len(p) < 2: continue
 			if p[0] == "r": result["rate"] = float(p[1])
 			elif p[0] == "p": result["pitch"] = float(p[1])
 		except ValueError: continue
