@@ -15,20 +15,26 @@ websocket_url = config.get("url", "ws://localhost:7774")
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
-voices = [(voice.name, voice.id) for voice in engine.getProperty("voices")]
+voices = [(voice.name.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace("   ", " ").replace("  ", " "), voice.id) for voice in engine.getProperty("voices")]
 
 # Define function to save synthesized speech to a wave file
-def synthesize_to_wave(voice_name, text):
+def synthesize_to_wave(event):
 	for v in voices:
-		if v[0] != voice_name: continue
+		if v[0] != event["voice"]: continue
 		voice_name = v[1]
 		break
 	engine.setProperty("voice", voice_name)
-	engine.save_to_file(text, "tmp.wav")
+	old_rate = engine.getProperty("rate")
+	old_pitch = engine.getProperty("pitch")
+	if "rate" in event: engine.setProperty("rate", float(event["rate"]))
+	if "pitch" in event: engine.setProperty("pitch", float(event["pitch"]))
+	engine.save_to_file(event["text"], "tmp.wav")
 	try: engine.runAndWait()
 	except Exception as e:
 		print(e)
 		pass
+	if "rate" in event: engine.setProperty("rate", old_rate)
+	if "pitch" in event: engine.setProperty("pitch", old_pitch)
 	if sys.platform == "darwin":
 		# frustratingly pyttsx3 on MacOS produces aif files right now.
 		os.rename("tmp.wav", "tmp.aiff")
@@ -57,9 +63,7 @@ async def handle_websocket():
 			try:
 				event = json.loads(message)
 				if "voice" in event and "text" in event:
-					voice = event["voice"]
-					text = event["text"]
-					encoded_wave = synthesize_to_wave(voice, text)
+					encoded_wave = synthesize_to_wave(event)
 					response = {
 						"speech": event["id"],
 						"data": encoded_wave

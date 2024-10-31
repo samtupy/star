@@ -1,5 +1,7 @@
 #include "form.nvgt"
 #include "ini.nvgt"
+#pragma asset audio
+#pragma asset "STAR.ini"
 
 atomic_bool program_exit = false;
 class message_queue {
@@ -103,6 +105,10 @@ void main() {
 				for(line_end = line_start; line_end < text.length() and text[line_end] != "\n"; line_end++);
 				send_request(text.substr(line_start, line_end -line_start), demo_ID);
 			}
+		}
+		if (f_voices == form.get_current_focus() && keyboard_modifiers & KEYMOD_CTRL > 0 && key_pressed(KEY_C)) {
+			clipboard_set_text(form.get_list_item(f_voices, form.get_list_position(f_voices)));
+			speak("Copied");
 		}
 		form.monitor();
 		if (form.is_pressed(f_render)) {
