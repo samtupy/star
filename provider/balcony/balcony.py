@@ -35,6 +35,7 @@ def synthesize_to_wave(event):
 		with open("tmp.wav", "rb") as f:
 			wave_data = base64.b64encode(f.read()).decode("UTF8")
 		os.unlink("tmp.wav");
+		return wave_data
 	except Exception as e:
 		print(e)
 		return ""
