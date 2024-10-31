@@ -1,48 +1,59 @@
 #include "form.nvgt"
+#include "ini.nvgt"
 
-json_object@[] message_queue;
-fast_mutex message_queue_mutex;
 atomic_bool program_exit = false;
-void enqueue_message(json_object@ msg) {
-	fast_mutex_lock scoped(message_queue_mutex);
-	message_queue.insert_last(msg);
+class message_queue {
+	json_object@[] message_queue;
+	fast_mutex message_queue_mutex;
+	void enqueue_message(json_object@ msg) {
+		fast_mutex_lock scoped(message_queue_mutex);
+		message_queue.insert_last(msg);
+	}
+	json_object@ dequeue_message() {
+		fast_mutex_lock scoped(message_queue_mutex);
+		if (message_queue.length() < 1) return null;
+		json_object@ r = message_queue[0];
+		message_queue.remove_at(0);
+		return r;
+	}
 }
-json_object@ dequeue_message() {
-	fast_mutex_lock scoped(message_queue_mutex);
-	if (message_queue.length() < 1) return null;
-	json_object@ r = message_queue[0];
-	message_queue.remove_at(0);
-	return r;
-}
+message_queue recv_queue;
+message_queue send_queue;
 
 web_socket@ ws;
 void socket_thread() {
 	json_object parse_fail;
 	parse_fail["error"] = "received invalid message from server";
 	try {
-		http_client cl("samtupy.com", 7774);
+		http_client cl(config.get_string("host", "127.0.0.1"), config.get_double("port", 7774));
 		http_request req(HTTP_GET, "/");
 		http_response resp;
 		@ws = web_socket(cl, req, resp);
 		int flags;
 		ws.send_frame("""{"user": 1}""");
 		while(program_exit == false) {
-			string frame = ws.receive_frame(flags);
-			if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE or frame == "") {
-				ws.shutdown();
-				break;
-			} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
-				ws.send_frame("", WS_FRAME_OP_PONG);
-				continue;
+			json_object@ msg_to_send = null;
+			while ((@msg_to_send = send_queue.dequeue_message()) != null) {
+				ws.send_frame(msg_to_send.stringify());
 			}
-			json_object@ o;
-			try {
-			@o = parse_json(frame);
-			} catch { enqueue_message(parse_fail); }
-			enqueue_message(o);
+			if (ws.poll(timespan(5000), SOCKET_SELECT_READ)) {
+				string frame = ws.receive_frame(flags);
+				if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE or frame == "") {
+					ws.shutdown();
+					break;
+				} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
+					ws.send_frame("", WS_FRAME_OP_PONG);
+					continue;
+				}
+				json_object@ o;
+				try {
+					@o = parse_json(frame);
+				} catch { recv_queue.enqueue_message(parse_fail); }
+				recv_queue.enqueue_message(o);
+			}
 		}
 	} catch {
-		enqueue_message(null);
+		recv_queue.enqueue_message(null);
 	}
 }
 
@@ -54,11 +65,12 @@ void send_request(const string&in text, int id) {
 	json_array lines;
 	for (uint i = 0; i < raw_lines.length(); i++) lines.add(raw_lines[i]);
 	result["request"] = lines;
-	ws.send_frame(result.stringify());
+	send_queue.enqueue_message(result);
 }
 
 audio_form form;
 sound demo;
+ini config("STAR.ini");
 int f_voices, f_script, f_render, f_exit;
 int render_ID = 0x7fff;
 int demo_ID = 0xffff;
@@ -69,13 +81,17 @@ void main() {
 	wait(200);
 	f_voices = form.create_list("available &voices");
 	f_script = form.create_input_box("enter &script", multiline:true);
-	f_render = form.create_button("&render to wav");
+	f_render = form.create_button("&render to wav", true);
 	f_exit = form.create_button("e&xit", false, true);
 	form.focus(f_script);
 	while(!form.is_pressed(f_exit)) {
 		wait(5);
 		form.monitor();
-		json_object@ msg = dequeue_message();
+		if (form.is_pressed(f_render)) {
+			string text = form.get_text(f_script);
+			send_request(text, demo_ID);
+		}
+		json_object@ msg = recv_queue.dequeue_message();
 		if (@msg == null) continue;
 		if (msg.exists("voices")) {
 			play_sound("ready");
@@ -92,10 +108,6 @@ void main() {
 				demo.push_memory(string_base64_decode(msg["data"]), true);
 				demo.play();
 			}
-		}
-		if (form.is_pressed(f_render)) {
-			const string text = form.get_text_reference(f_script);
-			send_request(text, demo_ID);
 		}
 	}
 	program_exit = true;

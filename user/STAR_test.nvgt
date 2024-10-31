@@ -1,5 +1,5 @@
 void main() {
-	http_client cl("samtupy.com", 7774);
+	http_client cl("127.0.0.1", 7774);
 	http_request req(HTTP_GET, "/");
 	http_response resp;
 	web_socket ws(cl, req, resp);

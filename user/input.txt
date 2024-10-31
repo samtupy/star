@@ -1,2 +1,1 @@
-Alex: test on the mac
-David: Test of microsoft sam!
+David: Test of microsoft david!

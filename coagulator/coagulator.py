@@ -29,7 +29,7 @@ def find_provider_for_voice(voice):
 		if re.search(r"\b" + voice + r"\b", v): return (v, random.choice(g.voices[v]))
 	return (voice, None)
 
-def handle_speech_request(client, server, request, id):
+def handle_speech_request(client, server, request, id = ""):
 	"""Receives a list of requests such as ["Sam: hello", "Alex<p=4>: What's up!"] and dispatches each line to a voice provider for synthesis."""
 	if not "speech_sequence" in client or id: client["speech_sequence"] = 0
 	if not id: id = "_" + id
