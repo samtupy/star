@@ -59,12 +59,12 @@ void socket_thread() {
 	}
 }
 
-void send_request(const string&in text, int id) {
+void send_request(const string&in text, bool rendering) {
 	json_object result;
-	result["id"] = id;
+	result["id"] = rendering? render_ID : string_hash_sha256(text, false);
 	result["user"] = 1;
 	string[]@ raw_lines = text.split("\r\n", false);
-	if (id == render_ID) {
+	if (rendering) {
 		item_count = raw_lines.length();
 		form.set_caption(f_render, "Cancel");
 		play("begin");
@@ -77,11 +77,12 @@ void send_request(const string&in text, int id) {
 
 audio_form form;
 sound demo;
+dictionary demo_cache;
+string last_demoed_line;
 ini config("STAR.ini");
 int render_count = 0, item_count = 0;
 int f_voices, f_script, f_render, f_exit;
 int render_ID = 0x7fff;
-int demo_ID = 0xffff;
 void main() {
 	async<void>(socket_thread);
 	show_window("STAR client");
@@ -110,7 +111,15 @@ void main() {
 				int line_end;
 				for(line_end = line_start; line_end < text.length() and text[line_end] != "\n"; line_end++);
 				string line_text = text.substr(line_start, line_end -line_start);
-				if (!line_text.empty()) send_request(line_text, demo_ID);
+				if (line_text.empty()) continue;
+				string data = string_hash_sha256(line_text);
+				last_demoed_line = data;
+				if (demo_cache.exists(data)) {
+					data = string(demo_cache[data]);
+					demo.close();
+					demo.push_memory(data, true);
+					demo.play();
+				} else send_request(line_text, false);
 			}
 		}
 		if (f_voices == form.get_current_focus() && keyboard_modifiers & KEYMOD_CTRL > 0 && key_pressed(KEY_C)) {
@@ -124,7 +133,7 @@ void main() {
 				continue;
 			}
 			string text = form.get_text(f_script);
-			send_request(text, render_ID);
+			send_request(text, true);
 		}
 		json_object@ msg = recv_queue.dequeue_message();
 		if (@msg == null) continue;
@@ -146,13 +155,20 @@ void main() {
 				if (!directory_exists("output")) directory_create("output");
 				file_put_contents("output/" + id_parts[2] + ".wav", string_base64_decode(msg["data"]));
 			} else {
+				string data = string_base64_decode(msg["data"]);
+				demo_cache.set(id_parts[1], data);
 				demo.close();
-				demo.push_memory(string_base64_decode(msg["data"]), true);
+				demo.push_memory(data, true);
 				demo.play();
 			}
 		} else if (msg.exists("warning")) {
 			play("warning");
 			if (item_count > 0) render_count++;
+			if (render_count == item_count) {
+				play("complete");
+				form.set_caption(f_render, "&Render to wav");
+				item_count = render_count = 0;
+			}
 			speak(msg["warning"], false);
 		}
 	}

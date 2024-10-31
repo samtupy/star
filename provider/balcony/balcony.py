@@ -20,6 +20,10 @@ for v in raw:
 	voices.append((v.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
 
 def synthesize_to_wave(event):
+	for v in voices:
+		if v[0] != event["voice"]: continue
+		event["voice"] = v[1]
+		break
 	try:
 		extra_args = ["-n", event["voice"], "-t", event["text"], "-o"]
 		if "rate" in event: extra_args += ["-s", str(int(event["rate"]))]

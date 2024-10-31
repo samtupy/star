@@ -23,7 +23,7 @@ def synthesize_to_wave(event):
 	global engine
 	for v in voices:
 		if v[0] != event["voice"]: continue
-		voice_name = v[1]
+		event["voice"] = v[1]
 		break
 	engine.setProperty("voice", voice_name)
 	old_rate = engine.getProperty("rate") if "rate" in event else None
