@@ -1,2 +1,7 @@
 __pycache__
+provider/pyttsx/build
+provider/pyttsx/dist
 user/output
+user/STAR
+user/*.zip
+*.spec

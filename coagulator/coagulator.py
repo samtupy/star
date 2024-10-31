@@ -25,9 +25,17 @@ def parse_speech_meta(meta):
 	return result
 
 def find_provider_for_voice(voice):
-	"""Searches the list of voices for a provider to send a speech request to given a voice name."""
-	for v in g.voices:
-		if re.search(r"\b" + voice + r"\b", v): return (v, random.choice(g.voices[v]))
+	"""Searches the list of voices for a provider to send a speech request to given a voice name. Sometimes 2 similarly named voices may be available, in which case strings like 2.voicename or 3.voicename are accepted."""
+	if not voice: return (voice, None)
+	instance = 1
+	if voice[0].isdigit() and "." in voice:
+		instance = int(voice[:voice.find(".")])
+		voice = voice[voice.find(".") + 1:]
+	found = 1
+	for v in sorted(g.voices, key = len):
+		if re.search(r"\b" + voice + r"\b", v):
+			if instance == found: return (v, random.choice(g.voices[v]))
+			else: found += 1
 	return (voice, None)
 
 def handle_speech_request(client, server, request, id = ""):
@@ -64,9 +72,13 @@ def on_message(client, server, message):
 		if msg["provider"] < g.provider_rev:
 			server.send_message(client, json.dumps({"error", f"must be revision {g.provider_rev} or higher"}))
 			return
+		gained_voice = False
 		for v in msg["voices"]:
 			if v in g.voices: g.voices[v].append(client)
-			else: g.voices[v] = [client]
+			else:
+				g.voices[v] = [client]
+				gained_voice = True
+		if gained_voice: server.send_message_to_all(json.dumps({"voices": list(g.voices)}))
 	elif "user" in msg:
 		if msg["user"] < g.user_rev:
 			server.send_message(client, json.dumps({"error", f"must be revision {g.user_rev} or higher"}))
@@ -79,10 +91,14 @@ def on_message(client, server, message):
 
 def on_lost_client(client, server):
 	"""If a provider disconnects, we must remove it's list of voices. If a user disconnects mid-synthesis, we must remove it's speech requests."""
+	lost_voice = False
 	for v in list(g.voices):
 		if client in g.voices[v]:
 			g.voices[v].remove(client)
-			if len(g.voices[v]) == 0: del(g.voices[v])
+			if len(g.voices[v]) == 0:
+				lost_voice = True
+				del(g.voices[v])
+	if lost_voice: server.send_message_to_all(json.dumps({"voices": list(g.voices)}))
 	for r in list(g.speech_requests):
 		if g.speech_requests[r] == client: del(g.speech_requests[r])
 

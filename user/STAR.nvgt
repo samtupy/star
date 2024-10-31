@@ -95,15 +95,22 @@ void main() {
 	while(!form.is_pressed(f_exit)) {
 		wait(5);
 		if (form.get_current_focus() == f_script and (keyboard_modifiers & KEYMOD_CTRL) != 0) {
-			int dir = 0;
+			int dir = -100;
 			if (key_pressed(KEY_UP)) dir = -1;
 			else if (key_pressed(KEY_DOWN)) dir = 1;
-			if (dir != 0 and form.set_line(f_script, form.get_line_number(f_script) + dir)) {
+			else if(key_pressed(KEY_SPACE)) {
+				get_characters();
+				dir = 0;
+			}
+			key_repeating(KEY_UP) or key_repeating(KEY_DOWN);
+			if (key_repeating(KEY_SPACE)) get_characters();
+			if (dir != -100 and form.set_line(f_script, form.get_line_number(f_script) + dir)) {
 				const string text = form.get_text_reference(f_script);
 				int line_start = form.get_text_cursor(f_script);
 				int line_end;
 				for(line_end = line_start; line_end < text.length() and text[line_end] != "\n"; line_end++);
-				send_request(text.substr(line_start, line_end -line_start), demo_ID);
+				string line_text = text.substr(line_start, line_end -line_start);
+				if (!line_text.empty()) send_request(line_text, demo_ID);
 			}
 		}
 		if (f_voices == form.get_current_focus() && keyboard_modifiers & KEYMOD_CTRL > 0 && key_pressed(KEY_C)) {
