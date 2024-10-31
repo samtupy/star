@@ -164,7 +164,7 @@ void main() {
 		} else if (msg.exists("warning")) {
 			play("warning");
 			if (item_count > 0) render_count++;
-			if (render_count == item_count) {
+			if (render_count == item_count and item_count > 0) {
 				play("complete");
 				form.set_caption(f_render, "&Render to wav");
 				item_count = render_count = 0;

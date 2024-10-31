@@ -17,7 +17,9 @@ raw = subprocess.run(["balcon", "-l"], shell = True, capture_output = True, text
 voices = []
 for v in raw:
 	if not v or not v.startswith(" "): continue
-	voices.append((v.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
+	voice = v
+	if "::" in voice: voice = voice[voice.find("::") + 3:]
+	voices.append((voice.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
 
 def synthesize_to_wave(event):
 	for v in voices:
@@ -25,10 +27,14 @@ def synthesize_to_wave(event):
 		event["voice"] = v[1]
 		break
 	try:
-		extra_args = ["-n", event["voice"], "-t", event["text"], "-o"]
+		extra_args = ["-n", event["voice"], "-t", event["text"], "-w", "tmp.wav"]
 		if "rate" in event: extra_args += ["-s", str(int(event["rate"]))]
 		if "pitch" in event: extra_args += ["-p", str(int(event["pitch"]))]
-		return base64.b64encode(subprocess.run(["balcon"] + extra_args, shell = True, capture_output = True).stdout).decode("UTF8")
+		subprocess.run(["balcon"] + extra_args, shell = True)
+		wave_data = None
+		with open("tmp.wav", "rb") as f:
+			wave_data = base64.b64encode(f.read()).decode("UTF8")
+		os.unlink("tmp.wav");
 	except Exception as e:
 		print(e)
 		return ""
