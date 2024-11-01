@@ -33,16 +33,16 @@ def synthesize_to_wave(event):
 	engine.setProperty("voice", event["voice"])
 	old_rate = engine.getProperty("rate") if "rate" in event else None
 	old_pitch = engine.getProperty("pitch") if "pitch" in "event" else None
-	if "rate" in event: engine.setProperty("rate", int(event["rate"]))
-	if "pitch" in event: engine.setProperty("pitch", float(event["pitch"]))
+	#if "rate" in event: engine.setProperty("rate", int(event["rate"]))
+	#if "pitch" in event: engine.setProperty("pitch", float(event["pitch"]))
 	with tempfile.NamedTemporaryFile(delete=False) as fp:
 		fp.close()
 	engine.save_to_file(event["text"], fp.name)
 	wave_data = None
 	try:
 		engine.runAndWait()
-		if "rate" in event: engine.setProperty("rate", old_rate)
-		if "pitch" in event: engine.setProperty("pitch", old_pitch)
+		#if "rate" in event: engine.setProperty("rate", old_rate)
+		#if "pitch" in event: engine.setProperty("pitch", old_pitch)
 		if sys.platform == "darwin":
 			# frustratingly pyttsx3 on MacOS produces aif files right now.
 			os.rename(fp.name, "tmp.aiff")
@@ -72,7 +72,7 @@ async def handle_websocket():
 	should_exit = False
 	while not should_exit:
 		try:
-			async with websockets.connect(websocket_url) as websocket:
+			async with websockets.connect(websocket_url, max_size = None, max_queue = 4096) as websocket:
 				print(f"connected {len(voices)} voices")
 				await send_voices(websocket)
 				while True:

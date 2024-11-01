@@ -78,7 +78,11 @@ void send_request(const string&in text, bool rendering) {
 		play("begin");
 	}
 	json_array lines;
-	for (uint i = 0; i < raw_lines.length(); i++) lines.add(raw_lines[i]);
+	for (uint i = 0; i < raw_lines.length(); i++) {
+		string l = raw_lines[i].trim_whitespace();
+		if (l.starts_with(";")) continue;
+		lines.add(l);
+	}
 	result["request"] = lines;
 	send_queue.enqueue_message(result);
 }
@@ -149,8 +153,8 @@ void main() {
 				int line_start = form.get_text_cursor(f_script);
 				int line_end;
 				for(line_end = line_start; line_end < text.length() and text[line_end] != "\n"; line_end++);
-				string line_text = text.substr(line_start, line_end -line_start);
-				starspeak(line_text);
+				string line_text = text.substr(line_start, line_end -line_start).trim_whitespace_this();
+				if (!line_text.starts_with(";")) starspeak(line_text);
 			}
 		}
 		if (form.get_current_focus() == f_voices) {
@@ -182,6 +186,9 @@ void main() {
 		if (msg.exists("voices")) {
 			play("ready");
 			json_array@ v = msg["voices"];
+			int old_count = form.get_list_count(f_voices);
+			if (v.length() > old_count) play("voices_connect");
+			else if (v.length() < old_count) play("voices_disconnect");
 			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
 		} else if(msg.exists("speech")) {

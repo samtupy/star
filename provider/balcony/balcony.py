@@ -58,7 +58,7 @@ async def handle_websocket():
 	should_exit = False
 	while not should_exit:
 		try:
-			async with websockets.connect(websocket_url, max_size = None) as websocket:
+			async with websockets.connect(websocket_url, max_size = None, max_queue = 4096) as websocket:
 				await send_voices(websocket)
 				print(f"Connected {len(voices)} voices.")
 				while True:
