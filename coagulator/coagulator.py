@@ -36,7 +36,7 @@ def find_provider_for_voice(voice):
 	"""Searches the list of voices for a provider to send a speech request to given a voice name."""
 	if not voice:
 		return voice, None
-	voice = voice.lower().stripp()
+	voice = voice.lower().strip()
 	instance = 1
 	if voice[0].isdigit() and "." in voice:
 		instance, voice = int(voice.split(".")[0]), voice.split(".")[1]
