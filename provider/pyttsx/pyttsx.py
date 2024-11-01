@@ -63,7 +63,7 @@ def synthesize_to_wave(event):
 # WebSocket handling
 async def send_voices(websocket):
 	data = {
-		"provider": 1,
+		"provider": 2,
 		"voices": [v[0] for v in voices]
 	}
 	await websocket.send(json.dumps(data))

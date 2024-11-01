@@ -10,8 +10,8 @@ import websockets
 import websockets.asyncio.server
 
 def g(): pass #globals
-g.provider_rev = 1
-g.user_rev = 1
+g.provider_rev = 2
+g.user_rev = 2
 g.next_client_id = 1
 
 def parse_speech_meta(meta):

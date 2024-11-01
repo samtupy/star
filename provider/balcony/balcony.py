@@ -36,7 +36,7 @@ async def synthesize_to_wave(event):
 		extra_args = ["-n", event["voice"], "-t", event["text"], "-w", fp.name]
 		if "rate" in event: extra_args += ["-s", str(int(event["rate"]))]
 		if "pitch" in event: extra_args += ["-p", str(int(event["pitch"]))]
-		process = await asyncio.create_subprocess_exec("balcon", *extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		process = await asyncio.create_subprocess_exec("balcon", *extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NO_WINDOW)
 		await process.communicate()
 		wave_data = await asyncio.to_thread(read_wave_file, fp.name)
 		os.unlink(fp.name)
@@ -53,7 +53,7 @@ def read_wave_file(filename):
 # WebSocket handling
 async def send_voices(websocket):
 	data = {
-		"provider": 1,
+		"provider": 2,
 		"voices": [v[0] for v in voices]
 	}
 	await websocket.send(json.dumps(data))

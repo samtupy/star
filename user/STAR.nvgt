@@ -51,7 +51,7 @@ void socket_thread() {
 			http_response resp;
 			@ws = web_socket(cl, req, resp);
 			int flags;
-			ws.send_frame("""{"user": 1}""");
+			ws.send_frame("""{"user": 2}""");
 			server_connected = true;
 			recv_queue.enqueue_message(json_object());
 			while(program_exit == false) {
@@ -114,7 +114,7 @@ void handle_audio(const string&in audio) {
 void send_request(const string&in text, bool rendering) {
 	json_object result;
 	result["id"] = rendering? render_ID : string_hash_sha256(text, false);
-	result["user"] = 1;
+	result["user"] = 2;
 	string[]@ raw_lines = text.split("\r\n", false);
 	if (rendering) {
 		item_count = raw_lines.length();
