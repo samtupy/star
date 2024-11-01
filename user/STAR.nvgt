@@ -153,7 +153,7 @@ void main() {
 			bool rendering = parse_int(id_parts[1]) == render_ID;
 			if (rendering) {
 				render_count++;
-				if (render_count < item_count) play("progress", pitch = float(render_count / item_count) * 120);
+				if (render_count < item_count) play("progress", pitch = float(render_count) / item_count * 250.0);
 				else {
 					play("complete");
 					form.set_caption(f_render, "&Render to wav");

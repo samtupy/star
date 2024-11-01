@@ -7,6 +7,7 @@ import time
 import asyncio
 import traceback
 import websockets
+import websockets.asyncio.server
 
 def g(): pass #globals
 g.provider_rev = 1
@@ -124,7 +125,7 @@ async def on_client_disconnect(ws, client_id):
 		if g.speech_requests[r]["ws"] == ws:
 			del g.speech_requests[r]
 
-async def client_handler(ws, path):
+async def client_handler(ws):
 	"""Manages WebSocket client connections."""
 	client_id = g.next_client_id
 	g.next_client_id += 1
@@ -144,15 +145,15 @@ async def client_handler(ws, path):
 		await on_client_disconnect(ws, client_id)
 
 async def main():
-		g.speech_requests = {}
-		g.voices = {}
-		g.clients = {}
-		async with websockets.serve(client_handler, "0.0.0.0", 7774):
-			print("WebSocket server started.")
-			await asyncio.Future()
+	g.speech_requests = {}
+	g.voices = {}
+	g.clients = {}
+	async with websockets.asyncio.server.serve(client_handler, "0.0.0.0", 7774, max_size = 1024 * 1024 * 5, max_queue=256, ):
+		print("Coagulator up.")
+		await asyncio.get_running_loop().create_future()
 
 if __name__ == "__main__":
 	try:
 		asyncio.run(main())
-	except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
-		print("good bye")
+	except KeyboardInterrupt:
+		print("coagulator down.")
