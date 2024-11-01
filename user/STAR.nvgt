@@ -4,7 +4,7 @@
 #pragma asset "STAR.ini"
 
 atomic_bool program_exit = false, server_connected = true; // Initial loop will set server_connected to false when needed.
-class message_queue {
+class json_message_queue {
 	json_object@[] message_queue;
 	fast_mutex message_queue_mutex;
 	void enqueue_message(json_object@ msg) {
@@ -19,8 +19,24 @@ class message_queue {
 		return r;
 	}
 }
-message_queue recv_queue;
-message_queue send_queue;
+class string_message_queue {
+	string[] message_queue;
+	fast_mutex message_queue_mutex;
+	void enqueue_message(const string&in msg) {
+		fast_mutex_lock scoped(message_queue_mutex);
+		message_queue.insert_last(msg);
+	}
+	string dequeue_message() {
+		fast_mutex_lock scoped(message_queue_mutex);
+		if (message_queue.length() < 1) return "";
+		string r = message_queue[0];
+		message_queue.remove_at(0);
+		return r;
+	}
+}
+json_message_queue recv_queue;
+json_message_queue send_queue;
+string_message_queue audio_queue;
 
 web_socket@ ws;
 void socket_thread() {
@@ -51,6 +67,9 @@ void socket_thread() {
 					} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
 						ws.send_frame(frame, WS_FRAME_FLAG_FIN | WS_FRAME_OP_PONG);
 						continue;
+					} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_BINARY) {
+						audio_queue.enqueue_message(frame);
+						continue;
 					}
 					json_object@ o;
 					try {
@@ -64,6 +83,31 @@ void socket_thread() {
 			if (server_connected == true) recv_queue.enqueue_message(lost_server);
 			server_connected = false;
 		}
+	}
+}
+
+void handle_audio(const string&in audio) {
+	if (audio.length() < 44) return;
+	datastream ds(audio.substr(0, 2));
+	string id = audio.substr(2, ds.read_uint16());
+	string[]@ id_parts = id.split("_");
+	bool rendering = parse_int(id_parts[1]) == render_ID;
+	if (rendering) {
+		render_count++;
+		if (render_count < item_count) play("progress", pitch = (float(render_count) / item_count * 100.0) + 60);
+		else {
+			play("complete");
+			form.set_caption(f_render, "&Render to wav");
+			item_count = render_count = 0;
+		}
+		if (!directory_exists("output")) directory_create("output");
+		file_put_contents("output/" + id_parts[2] + ".wav", audio.substr(id.length() + 2));
+	} else {
+		string data = audio.substr(id.length() + 2);
+		demo_cache.set(id_parts[1], data);
+		demo.close();
+		demo.push_memory(data, true);
+		demo.play();
 	}
 }
 
@@ -174,13 +218,15 @@ void main() {
 		}
 		form.monitor();
 		if (form.is_pressed(f_render)) {
-			if (render_count > 0) {
+			if (item_count > 0) {
 				speak("Rendering in progress, will add canceling ability soon");
 				continue;
 			}
-			string text = form.get_text(f_script);
-			send_request(text, true);
+			string text = form.get_text(f_script).trim_whitespace_this();
+			if (!text.empty()) send_request(text, true);
 		}
+		string audio = audio_queue.dequeue_message();
+		if (!audio.empty()) handle_audio(audio);
 		json_object@ msg = recv_queue.dequeue_message();
 		if (@msg == null) continue;
 		if (msg.exists("voices")) {
@@ -191,26 +237,6 @@ void main() {
 			else if (v.length() < old_count) play("voices_disconnect");
 			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
-		} else if(msg.exists("speech")) {
-			string[]@ id_parts = string(msg["speech"]).split("_");
-			bool rendering = parse_int(id_parts[1]) == render_ID;
-			if (rendering) {
-				render_count++;
-				if (render_count < item_count) play("progress", pitch = (float(render_count) / item_count * 100.0) + 60);
-				else {
-					play("complete");
-					form.set_caption(f_render, "&Render to wav");
-					item_count = render_count = 0;
-				}
-				if (!directory_exists("output")) directory_create("output");
-				file_put_contents("output/" + id_parts[2] + ".wav", string_base64_decode(msg["data"]));
-			} else {
-				string data = string_base64_decode(msg["data"]);
-				demo_cache.set(id_parts[1], data);
-				demo.close();
-				demo.push_memory(data, true);
-				demo.play();
-			}
 		} else if (msg.exists("warning")) {
 			play("warning");
 			if (item_count > 0) render_count++;

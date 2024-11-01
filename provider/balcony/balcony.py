@@ -1,12 +1,12 @@
 import json
-import base64
 import asyncio
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
-import websockets
+import websockets.asyncio.client
 
 from configobj import ConfigObj
 
@@ -24,27 +24,31 @@ for v in raw:
 	if "aliases" in config and voice in config["aliases"]: voice = config["aliases"][voice]
 	if not voice: continue
 	voices.append((voice, v.strip()))
-	
 
-def synthesize_to_wave(event):
+async def synthesize_to_wave(event):
 	for v in voices:
-		if v[0] != event["voice"]: continue
-		event["voice"] = v[1]
-		break
+		if v[0] == event["voice"]:
+			event["voice"] = v[1]
+			break
 	try:
-		extra_args = ["-n", event["voice"], "-t", event["text"], "-w", "tmp.wav"]
+		with tempfile.NamedTemporaryFile(delete=False) as fp:
+			fp.close()
+		extra_args = ["-n", event["voice"], "-t", event["text"], "-w", fp.name]
 		if "rate" in event: extra_args += ["-s", str(int(event["rate"]))]
 		if "pitch" in event: extra_args += ["-p", str(int(event["pitch"]))]
-		subprocess.run(["balcon"] + extra_args, shell = True)
-		wave_data = None
-		with open("tmp.wav", "rb") as f:
-			wave_data = base64.b64encode(f.read()).decode("UTF8")
-		os.unlink("tmp.wav");
+		process = await asyncio.create_subprocess_exec("balcon", *extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		await process.communicate()
+		wave_data = await asyncio.to_thread(read_wave_file, fp.name)
+		os.unlink(fp.name)
 		return wave_data
 	except Exception as e:
 		print(e)
 		return ""
 
+# Helper function to read binary file data
+def read_wave_file(filename):
+	with open(filename, "rb") as f:
+		return f.read()
 
 # WebSocket handling
 async def send_voices(websocket):
@@ -54,24 +58,29 @@ async def send_voices(websocket):
 	}
 	await websocket.send(json.dumps(data))
 
+async def process_event(websocket, event):
+	try:
+		if "voice" in event and "text" in event:
+			encoded_wave = await synthesize_to_wave(event)
+			if not encoded_wave: return ""
+			response = len(event["id"]).to_bytes(2, "little") + event["id"].encode() + encoded_wave
+			await websocket.send(response)
+	except Exception as e:
+		print(f"Error processing event: {e}")
+		traceback.print_exc()
+
 async def handle_websocket():
 	should_exit = False
 	while not should_exit:
 		try:
-			async with websockets.connect(websocket_url, max_size = None, max_queue = 4096) as websocket:
+			async with websockets.asyncio.client.connect(websocket_url, max_size = None, max_queue = 4096) as websocket:
 				await send_voices(websocket)
 				print(f"Connected {len(voices)} voices.")
 				while True:
 					message = await websocket.recv()
 					try:
 						event = json.loads(message)
-						if "voice" in event and "text" in event:
-							encoded_wave = synthesize_to_wave(event)
-							response = {
-								"speech": event["id"],
-								"data": encoded_wave
-							}
-							await websocket.send(json.dumps(response))
+						asyncio.create_task(process_event(websocket, event))
 					except json.JSONDecodeError:
 						print("Received an invalid JSON message:", message)
 		except KeyboardInterrupt:

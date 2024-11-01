@@ -1,4 +1,4 @@
-# The original source code for this program is in coagulator_old.py. I wrote it using what turned out to be a noncompliant and incomplete web_socket_server framework, so I asked ChatGPT to rewrite it using the python websockets framework and then modified the result to make it work.
+# The original source code for this program is in coagulator_old.py. I wrote it using what turned out to be a noncompliant and incomplete web_socket_server framework, so I asked ChatGPT to rewrite it using the python websockets framework and then modified the result to make it work. In the end, Chat GPT is responsible for the asyncio stuff mostly.
 
 import json
 import random
@@ -78,6 +78,13 @@ async def handle_speech_request(client, request, id=""):
 
 async def on_message(ws, client, message):
 	"""Handles incoming WebSocket messages."""
+	if type(message) == bytes:
+		req_len = int.from_bytes(message[:2], "little")
+		req = message[2:req_len+2].decode()
+		if req in g.speech_requests: 
+			await g.speech_requests[req]["ws"].send(message)
+			del g.speech_requests[req]
+		return
 	try:
 		msg = json.loads(message)
 	except json.JSONDecodeError:
@@ -103,9 +110,6 @@ async def on_message(ws, client, message):
 			await handle_speech_request(client, msg["request"], str(msg.get("id", "")))
 		else:
 			await ws.send(json.dumps({"voices": list(g.voices)}))
-	elif "speech" in msg and msg["speech"] in g.speech_requests and "data" in msg:
-		await g.speech_requests[msg["speech"]]["ws"].send(message)
-		del g.speech_requests[msg["speech"]]
 
 async def notify_all_clients(data, ignore_list = []):
 	"""Broadcasts a message to all connected clients."""
@@ -143,7 +147,7 @@ async def client_handler(ws):
 	except websockets.exceptions.ConnectionClosedOK: pass
 	except: traceback.print_exc()
 	finally:
-		del g.clients[client_id]
+		del(g.clients[client_id])
 		await on_client_disconnect(ws, client_id)
 
 async def main():

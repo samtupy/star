@@ -81,11 +81,8 @@ async def handle_websocket():
 						event = json.loads(message)
 						if "voice" in event and "text" in event:
 							encoded_wave = synthesize_to_wave(event)
-							response = {
-								"speech": event["id"],
-								"data": encoded_wave
-							}
-							await websocket.send(json.dumps(response))
+							response = len(event["id"]).to_bytes(2, "little") + event["id"].encode() + encoded_wave
+							await websocket.send(response)
 					except json.JSONDecodeError:
 						print("Received an invalid JSON message:", message)
 		except (websockets.exceptions.WebSocketException, websockets.exceptions.ConnectionClosedError, websockets.exceptions.ConnectionClosedOK, ConnectionRefusedError, TimeoutError) as e:
