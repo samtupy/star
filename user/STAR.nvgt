@@ -233,8 +233,14 @@ void main() {
 			play("ready");
 			json_array@ v = msg["voices"];
 			int old_count = form.get_list_count(f_voices);
-			if (v.length() > old_count) play("voices_connect");
-			else if (v.length() < old_count) play("voices_disconnect");
+			int v_dif = v.length() - old_count;
+			if (v_dif > 0) {
+				play("voices_connect");
+				if (old_count > 0) speak(v_dif + " voice"+(v_dif != 1 ? "s" : "") + " added.");
+			} else if (v_dif < 0) {
+				play("voices_disconnect");
+				speak(v_dif + " voice"+(v_dif != 1 ? "s" : "") + " removed.");
+			}
 			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
 		} else if (msg.exists("warning")) {
