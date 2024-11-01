@@ -36,12 +36,13 @@ def find_provider_for_voice(voice):
 	"""Searches the list of voices for a provider to send a speech request to given a voice name."""
 	if not voice:
 		return voice, None
+	voice = voice.lower().stripp()
 	instance = 1
 	if voice[0].isdigit() and "." in voice:
 		instance, voice = int(voice.split(".")[0]), voice.split(".")[1]
 	found = 1
 	for v in sorted(g.voices, key=len):
-		if re.search(r"\b" + voice + r"\b", v):
+		if re.search(r"\b" + voice + r"\b", v.lower()):
 			if instance == found:
 				return v, random.choice(g.voices[v])
 			else:
