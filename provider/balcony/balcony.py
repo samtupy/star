@@ -20,7 +20,10 @@ for v in raw:
 	if not v or not v.startswith(" "): continue
 	voice = v
 	if "::" in voice: voice = voice[voice.find("::") + 3:]
-	voices.append((voice.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
+	voice = voice.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace("   ", " ").replace("  ", " ").strip()
+	if "aliases" in config and voice in config["aliases"]: voice = config["aliases"][voice]
+	if not voice: continue
+	voices.append((voice, v.strip()))
 	
 
 def synthesize_to_wave(event):

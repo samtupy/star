@@ -16,7 +16,12 @@ websocket_url = config.get("url", "ws://localhost:7774")
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
-voices = [(voice.name.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace("   ", " ").replace("  ", " ").strip(), voice.id) for voice in engine.getProperty("voices")]
+voices = []
+for v in engine.getProperty("voices"):
+	voice = v.name.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace("   ", " ").replace("  ", " ").strip()
+	if "aliases" in config and voice in config["aliases"]: voice = config["aliases"][voice]
+	if not voice: continue
+	voices.append((voice, v.id))
 
 # Define function to save synthesized speech to a wave file
 def synthesize_to_wave(event):
@@ -68,6 +73,7 @@ async def handle_websocket():
 	while not should_exit:
 		try:
 			async with websockets.connect(websocket_url) as websocket:
+				print(f"connected {len(voices)} voices")
 				await send_voices(websocket)
 				while True:
 					message = await websocket.recv()
@@ -84,7 +90,10 @@ async def handle_websocket():
 						print("Received an invalid JSON message:", message)
 		except (websockets.exceptions.WebSocketException, websockets.exceptions.ConnectionClosedError, websockets.exceptions.ConnectionClosedOK, ConnectionRefusedError, TimeoutError) as e:
 					print(f"reconnecting... {e}")
+		except KeyboardInterrupt: return
 
 # Main entry point
 if __name__ == "__main__":
-	asyncio.run(handle_websocket())
+	try:
+		asyncio.run(handle_websocket())
+	except KeyboardInterrupt: pass

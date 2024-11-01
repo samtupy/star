@@ -3,7 +3,7 @@
 #pragma asset audio
 #pragma asset "STAR.ini"
 
-atomic_bool program_exit = false, server_connected = false;
+atomic_bool program_exit = false, server_connected = true; // Initial loop will set server_connected to false when needed.
 class message_queue {
 	json_object@[] message_queue;
 	fast_mutex message_queue_mutex;
@@ -37,6 +37,7 @@ void socket_thread() {
 			int flags;
 			ws.send_frame("""{"user": 1}""");
 			server_connected = true;
+			recv_queue.enqueue_message(json_object());
 			while(program_exit == false) {
 				json_object@ msg_to_send = null;
 				while ((@msg_to_send = send_queue.dequeue_message()) != null) {
@@ -44,7 +45,7 @@ void socket_thread() {
 				}
 				if (ws.poll(timespan(5000), SOCKET_SELECT_READ)) {
 					string frame = ws.receive_frame(flags);
-					if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE) {
+					if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE or flags == 0) {
 						ws.shutdown();
 						break;
 					} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
@@ -54,11 +55,12 @@ void socket_thread() {
 					json_object@ o;
 					try {
 						@o = parse_json(frame);
-					} catch { recv_queue.enqueue_message(parse_fail); }
+					} catch { recv_queue.enqueue_message(parse_fail); }	
 					recv_queue.enqueue_message(o);
 				}
 			}
 		} catch {
+			lost_server["error"] = get_exception_info();
 			if (server_connected == true) recv_queue.enqueue_message(lost_server);
 			server_connected = false;
 		}
@@ -80,6 +82,20 @@ void send_request(const string&in text, bool rendering) {
 	result["request"] = lines;
 	send_queue.enqueue_message(result);
 }
+void starspeak(const string&in text) {
+	if (text.empty()) {
+		demo.close();
+		return;
+	}
+	string data = string_hash_sha256(text);
+	last_demoed_line = data;
+	if (demo_cache.exists(data)) {
+		data = string(demo_cache[data]);
+		demo.close();
+		demo.push_memory(data, true);
+		demo.play();
+	} else send_request(text, false);
+}
 
 audio_form form;
 sound demo;
@@ -87,18 +103,35 @@ dictionary demo_cache;
 string last_demoed_line;
 ini config("STAR.ini");
 int render_count = 0, item_count = 0;
-int f_voices, f_script, f_render, f_exit;
+int f_voices, f_quickspeak, f_script, f_render, f_exit;
 int render_ID = 0x7fff;
-void main() {
-	async<void>(socket_thread);
+void setup_interface() {
 	show_window("STAR client");
+	wait(100);
 	form.create_window();
-	wait(200);
 	f_voices = form.create_list("available &voices");
+	f_quickspeak = form.create_input_box("&quickspeak", multiline:true, multiline_enter:false);
 	f_script = form.create_input_box("enter &script", multiline:true);
-	f_render = form.create_button("&render to wav", true);
+	f_render = form.create_button("&render to wav");
 	f_exit = form.create_button("e&xit", false, true);
 	form.focus(f_script);
+}
+
+void main() {
+	async<void>(socket_thread);
+	speak("connecting...");
+	while (true) {
+		wait(5);
+		json_object@ result = recv_queue.dequeue_message();
+		if (@result != null and result.exists("error")) {
+			int keep_going = question("STAR client error", "Coagulator at " + config.get_string("", "host", "127.0.0.1") + " does not appear to be online or your internet is broken. " + string(result["error"]) + " Run until connection is established?");
+			if (keep_going == 2) {
+				program_exit = true;
+				return;
+			} else break;
+		} else if (@result != null and result.size() == 0) break;
+	}
+	setup_interface();
 	while(!form.is_pressed(f_exit)) {
 		wait(5);
 		if (form.get_current_focus() == f_script and (keyboard_modifiers & KEYMOD_CTRL) != 0) {
@@ -117,20 +150,23 @@ void main() {
 				int line_end;
 				for(line_end = line_start; line_end < text.length() and text[line_end] != "\n"; line_end++);
 				string line_text = text.substr(line_start, line_end -line_start);
-				if (line_text.empty()) continue;
-				string data = string_hash_sha256(line_text);
-				last_demoed_line = data;
-				if (demo_cache.exists(data)) {
-					data = string(demo_cache[data]);
-					demo.close();
-					demo.push_memory(data, true);
-					demo.play();
-				} else send_request(line_text, false);
+				starspeak(line_text);
 			}
 		}
-		if (f_voices == form.get_current_focus() && keyboard_modifiers & KEYMOD_CTRL > 0 && key_pressed(KEY_C)) {
-			clipboard_set_text(form.get_list_item(f_voices, form.get_list_position(f_voices)));
-			speak("Copied");
+		if (form.get_current_focus() == f_voices) {
+			if (keyboard_modifiers & KEYMOD_CTRL > 0 && key_pressed(KEY_C)) {
+				clipboard_set_text(form.get_list_item(f_voices, form.get_list_position(f_voices)));
+				speak("Copied");
+			}
+			if (key_pressed(KEY_SPACE)) starspeak(form.get_list_item(f_voices, form.get_list_position(f_voices)) + ": Hello there, my name is " + form.get_list_item(f_voices, form.get_list_position(f_voices)));
+		}
+		if (form.get_current_focus() == f_quickspeak and keyboard_modifiers & KEYMOD_CTRL == 0 and keyboard_modifiers & KEYMOD_SHIFT == 0) {
+			if (key_pressed(KEY_RETURN)) {
+				string text = form.get_text(f_quickspeak);
+				int voice = form.get_list_position(f_voices);
+				if (!text.empty() and voice > -1) starspeak(form.get_list_item(f_voices, voice) + ": " + text);
+				else speak("Select a voice, type text and press enter to speak it");
+			}
 		}
 		form.monitor();
 		if (form.is_pressed(f_render)) {
@@ -153,7 +189,7 @@ void main() {
 			bool rendering = parse_int(id_parts[1]) == render_ID;
 			if (rendering) {
 				render_count++;
-				if (render_count < item_count) play("progress", pitch = float(render_count) / item_count * 250.0);
+				if (render_count < item_count) play("progress", pitch = (float(render_count) / item_count * 100.0) + 60);
 				else {
 					play("complete");
 					form.set_caption(f_render, "&Render to wav");

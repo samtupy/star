@@ -139,6 +139,7 @@ async def client_handler(ws):
 	except (asyncio.exceptions.CancelledError, KeyboardInterrupt):
 		print("shutting down...")
 		return
+	except websockets.exceptions.ConnectionClosedOK: pass
 	except: traceback.print_exc()
 	finally:
 		del g.clients[client_id]
@@ -148,7 +149,7 @@ async def main():
 	g.speech_requests = {}
 	g.voices = {}
 	g.clients = {}
-	async with websockets.asyncio.server.serve(client_handler, "0.0.0.0", 7774, max_size = 1024 * 1024 * 5, max_queue=256, ):
+	async with websockets.asyncio.server.serve(client_handler, "0.0.0.0", 7774, max_size = 1024 * 1024 * 5, max_queue = 4096):
 		print("Coagulator up.")
 		await asyncio.get_running_loop().create_future()
 
