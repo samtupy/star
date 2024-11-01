@@ -3,7 +3,7 @@
 #pragma asset audio
 #pragma asset "STAR.ini"
 
-atomic_bool program_exit = false;
+atomic_bool program_exit = false, server_connected = false;
 class message_queue {
 	json_object@[] message_queue;
 	fast_mutex message_queue_mutex;
@@ -26,36 +26,42 @@ web_socket@ ws;
 void socket_thread() {
 	json_object parse_fail;
 	parse_fail["error"] = "received invalid message from server";
-	try {
-		http_client cl(config.get_string("", "host", "127.0.0.1"), config.get_double("", "port", 7774));
-		http_request req(HTTP_GET, "/");
-		http_response resp;
-		@ws = web_socket(cl, req, resp);
-		int flags;
-		ws.send_frame("""{"user": 1}""");
-		while(program_exit == false) {
-			json_object@ msg_to_send = null;
-			while ((@msg_to_send = send_queue.dequeue_message()) != null) {
-				ws.send_frame(msg_to_send.stringify());
-			}
-			if (ws.poll(timespan(5000), SOCKET_SELECT_READ)) {
-				string frame = ws.receive_frame(flags);
-				if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE or frame == "") {
-					ws.shutdown();
-					break;
-				} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
-					ws.send_frame("", WS_FRAME_OP_PONG);
-					continue;
+	json_object lost_server;
+	lost_server["error"] = "lost server connection...";
+	while (program_exit == false) {
+		try {
+			http_client cl(config.get_string("", "host", "127.0.0.1"), config.get_double("", "port", 7774));
+			http_request req(HTTP_GET, "/");
+			http_response resp;
+			@ws = web_socket(cl, req, resp);
+			int flags;
+			ws.send_frame("""{"user": 1}""");
+			server_connected = true;
+			while(program_exit == false) {
+				json_object@ msg_to_send = null;
+				while ((@msg_to_send = send_queue.dequeue_message()) != null) {
+					ws.send_frame(msg_to_send.stringify());
 				}
-				json_object@ o;
-				try {
-					@o = parse_json(frame);
-				} catch { recv_queue.enqueue_message(parse_fail); }
-				recv_queue.enqueue_message(o);
+				if (ws.poll(timespan(5000), SOCKET_SELECT_READ)) {
+					string frame = ws.receive_frame(flags);
+					if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE) {
+						ws.shutdown();
+						break;
+					} else if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_PING) {
+						ws.send_frame(frame, WS_FRAME_FLAG_FIN | WS_FRAME_OP_PONG);
+						continue;
+					}
+					json_object@ o;
+					try {
+						@o = parse_json(frame);
+					} catch { recv_queue.enqueue_message(parse_fail); }
+					recv_queue.enqueue_message(o);
+				}
 			}
+		} catch {
+			if (server_connected == true) recv_queue.enqueue_message(lost_server);
+			server_connected = false;
 		}
-	} catch {
-		recv_queue.enqueue_message(null);
 	}
 }
 
@@ -140,6 +146,7 @@ void main() {
 		if (msg.exists("voices")) {
 			play("ready");
 			json_array@ v = msg["voices"];
+			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
 		} else if(msg.exists("speech")) {
 			string[]@ id_parts = string(msg["speech"]).split("_");
@@ -170,6 +177,9 @@ void main() {
 				item_count = render_count = 0;
 			}
 			speak(msg["warning"], false);
+		} else if (msg.exists("error")) {
+			play("error");
+			speak(msg["error"], false);
 		}
 	}
 	program_exit = true;

@@ -4,6 +4,7 @@ import asyncio
 import os
 import subprocess
 import sys
+import time
 import traceback
 import websockets
 
@@ -20,6 +21,7 @@ for v in raw:
 	voice = v
 	if "::" in voice: voice = voice[voice.find("::") + 3:]
 	voices.append((voice.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace("   ", " ").replace("  ", " ").strip(), v.strip()))
+	
 
 def synthesize_to_wave(event):
 	for v in voices:
@@ -55,6 +57,7 @@ async def handle_websocket():
 		try:
 			async with websockets.connect(websocket_url, max_size = None) as websocket:
 				await send_voices(websocket)
+				print(f"Connected {len(voices)} voices.")
 				while True:
 					message = await websocket.recv()
 					try:
@@ -68,10 +71,23 @@ async def handle_websocket():
 							await websocket.send(json.dumps(response))
 					except json.JSONDecodeError:
 						print("Received an invalid JSON message:", message)
-		except (websockets.exceptions.WebSocketException, websockets.exceptions.ConnectionClosedError, websockets.exceptions.ConnectionClosedOK, ConnectionRefusedError, TimeoutError) as e:
+		except KeyboardInterrupt:
+			print("shutting down")
+			should_exit = True
+		except Exception as e:
 			traceback.print_exc()
 			print(f"reconnecting... {e}")
+			time.sleep(3)
 
 # Main entry point
 if __name__ == "__main__":
-	asyncio.run(handle_websocket())
+	while True:
+		try:
+			asyncio.run(handle_websocket())
+		except KeyboardInterrupt:
+			print("shutting down")
+			break
+		except Exception as e:
+			traceback.print_exc()
+			print("reconnecting... {e}")
+			time.sleep(10)

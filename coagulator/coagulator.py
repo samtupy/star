@@ -1,119 +1,158 @@
+# The original source code for this program is in coagulator_old.py. I wrote it using what turned out to be a noncompliant and incomplete web_socket_server framework, so I asked ChatGPT to rewrite it using the python websockets framework and then modified the result to make it work.
+
 import json
 import random
 import re
 import time
-from websocket_server import WebsocketServer
+import asyncio
+import traceback
+import websockets
 
 def g(): pass #globals
 g.provider_rev = 1
 g.user_rev = 1
+g.next_client_id = 1
 
 def parse_speech_meta(meta):
-	"""Takes speech metadata such as "Sam" or "Sam<r=4 p=-2>" and returns a dictionary of parsed properties such as voice, rate and pitch."""
-	if meta.find("<") < 0: return {"voice": meta}
-	voice, part, params = meta.partition("<")
+	"""Takes speech metadata such as "Sam" or "Sam<r=4 p=-2>" and returns a dictionary of parsed properties such as voice, rate, and pitch."""
+	if "<" not in meta:
+		return {"voice": meta}
+	voice, _, params = meta.partition("<")
 	result = {"voice": voice}
-	params = params[:-1]
-	params = params.split(" ")
-	for p in params:
+	params = params.rstrip(">")
+	for p in params.split(" "):
 		try:
-			p = p.strip().split("=")
-			if len(p) < 2: continue
-			if p[0] == "r": result["rate"] = float(p[1])
-			elif p[0] == "p": result["pitch"] = float(p[1])
-		except ValueError: continue
+			key, value = p.strip().split("=")
+			if key == "r":
+				result["rate"] = float(value)
+			elif key == "p":
+				result["pitch"] = float(value)
+		except ValueError:
+			continue
 	return result
 
 def find_provider_for_voice(voice):
-	"""Searches the list of voices for a provider to send a speech request to given a voice name. Sometimes 2 similarly named voices may be available, in which case strings like 2.voicename or 3.voicename are accepted."""
-	if not voice: return (voice, None)
+	"""Searches the list of voices for a provider to send a speech request to given a voice name."""
+	if not voice:
+		return voice, None
 	instance = 1
 	if voice[0].isdigit() and "." in voice:
-		instance = int(voice[:voice.find(".")])
-		voice = voice[voice.find(".") + 1:]
+		instance, voice = int(voice.split(".")[0]), voice.split(".")[1]
 	found = 1
-	for v in sorted(g.voices, key = len):
+	for v in sorted(g.voices, key=len):
 		if re.search(r"\b" + voice + r"\b", v):
-			if instance == found: return (v, random.choice(g.voices[v]))
-			else: found += 1
-	return (voice, None)
+			if instance == found:
+				return v, random.choice(g.voices[v])
+			else:
+				found += 1
+	return voice, None
 
-def handle_speech_request(client, server, request, id = ""):
-	"""Receives a list of requests such as ["Sam: hello", "Alex<p=4>: What's up!"] and dispatches each line to a voice provider for synthesis."""
-	if not "speech_sequence" in client or id: client["speech_sequence"] = 0
-	if id: id = "_" + id
-	if type(request) == str: request = [request]
+async def handle_speech_request(client, request, id=""):
+	"""Processes and dispatches each speech request line to the appropriate voice provider."""
+	if "speech_sequence" not in client or id:
+		client["speech_sequence"] = 0
+	if id:
+		id = "_" + id
+	if isinstance(request, str):
+		request = [request]
 	for line in request:
-		raw_meta, part, text = line.partition(": ")
+		raw_meta, _, text = line.partition(": ")
 		if not text.strip():
-			server.send_message(client, json.dumps({"warning": f"no text found in line {line}"}))
+			await client["ws"].send(json.dumps({"warning": f"no text found in line {line}"}))
 			continue
 		meta = parse_speech_meta(raw_meta)
-		if not "voice" in meta:
-			server.send_message(client, json.dumps({"warning": f"failed to parse voice meta {raw_meta}"}))
+		if "voice" not in meta:
+			await client["ws"].send(json.dumps({"warning": f"failed to parse voice meta {raw_meta}"}))
 			continue
 		meta["voice"], provider = find_provider_for_voice(meta["voice"])
 		if not provider:
-			server.send_message(client, json.dumps({"warning": f"failed to find provider for {meta['voice']}"}))
+			await client["ws"].send(json.dumps({"warning": f"failed to find provider for {meta['voice']}"}))
 			continue
+		provider = g.clients[provider]["ws"]
 		client["speech_sequence"] += 1
-		meta["text"] = text
-		meta["id"] = f"{client['id']}{id}_{client['speech_sequence']}"
-		server.send_message(provider, json.dumps(meta))
+		meta.update({"text": text, "id": f"{client['id']}{id}_{client['speech_sequence']}"})
+		await provider.send(json.dumps(meta))
 		g.speech_requests[meta["id"]] = client
 
-def on_message(client, server, message):
-	"""This callback is fired every time we receive a new message on our server websocket. We handle both provider and user messages here."""
-	msg = {}
+async def on_message(ws, client, message):
+	"""Handles incoming WebSocket messages."""
 	try:
 		msg = json.loads(message)
-	except: return
+	except json.JSONDecodeError:
+		return
 	if "provider" in msg and "voices" in msg:
 		if msg["provider"] < g.provider_rev:
-			server.send_message(client, json.dumps({"error", f"must be revision {g.provider_rev} or higher"}))
+			await ws.send(json.dumps({"error": f"must be revision {g.provider_rev} or higher"}))
 			return
 		gained_voice = False
 		for v in msg["voices"]:
-			if v in g.voices: g.voices[v].append(client)
+			if v in g.voices:
+				g.voices[v].append(client["id"])
 			else:
-				g.voices[v] = [client]
+				g.voices[v] = [client["id"]]
 				gained_voice = True
-		if gained_voice: server.send_message_to_all(json.dumps({"voices": list(g.voices)}))
+		if gained_voice:
+			await notify_all_clients({"voices": list(g.voices)}, [client["id"]])
 	elif "user" in msg:
 		if msg["user"] < g.user_rev:
-			server.send_message(client, json.dumps({"error", f"must be revision {g.user_rev} or higher"}))
+			await ws.send(json.dumps({"error": f"must be revision {g.user_rev} or higher"}))
 			return
-		if "request" in msg: handle_speech_request(client, server, msg["request"], str(msg["id"]) if "id" in msg else "")
-		else: server.send_message(client, json.dumps({"voices": list(g.voices)}))
+		if "request" in msg:
+			await handle_speech_request(client, msg["request"], str(msg.get("id", "")))
+		else:
+			await ws.send(json.dumps({"voices": list(g.voices)}))
 	elif "speech" in msg and msg["speech"] in g.speech_requests and "data" in msg:
-		server.send_message(g.speech_requests[msg["speech"]], message)
-		del(g.speech_requests[msg["speech"]])
+		await g.speech_requests[msg["speech"]]["ws"].send(message)
+		del g.speech_requests[msg["speech"]]
 
-def on_lost_client(client, server):
-	"""If a provider disconnects, we must remove it's list of voices. If a user disconnects mid-synthesis, we must remove it's speech requests."""
+async def notify_all_clients(data, ignore_list = []):
+	"""Broadcasts a message to all connected clients."""
+	if g.clients:
+		await asyncio.gather(*[client["ws"].send(json.dumps(data)) for client in g.clients.values() if not client["id"] in ignore_list])
+
+async def on_client_disconnect(ws, client_id):
+	"""Handles client disconnections, updating voice providers and speech requests as needed."""
 	lost_voice = False
 	for v in list(g.voices):
-		if client in g.voices[v]:
-			g.voices[v].remove(client)
-			if len(g.voices[v]) == 0:
+		if client_id in g.voices[v]:
+			g.voices[v].remove(client_id)
+			if len(g.voices[v]) < 1:
+				del g.voices[v]
 				lost_voice = True
-				del(g.voices[v])
-	if lost_voice: server.send_message_to_all(json.dumps({"voices": list(g.voices)}))
+	if lost_voice: await notify_all_clients({"voices": list(g.voices)}, [client_id])
 	for r in list(g.speech_requests):
-		if g.speech_requests[r] == client: del(g.speech_requests[r])
+		if g.speech_requests[r]["ws"] == ws:
+			del g.speech_requests[r]
 
-def main():
-	g.speech_requests = {}
-	g.voices = {}
-	g.ws = WebsocketServer(port = 7774, host = "0.0.0.0")
-	g.ws.set_fn_client_left(on_lost_client)
-	g.ws.set_fn_message_received(on_message)
-	g.ws.run_forever()
+async def client_handler(ws, path):
+	"""Manages WebSocket client connections."""
+	client_id = g.next_client_id
+	g.next_client_id += 1
+	client = {"ws": ws, "id": client_id}
+	g.clients[client_id] = client
 	try:
-		while 1: time.sleep(5)
-	except KeyboardInterrupt:
-		print("shutting down")
-		g.ws.shutdown_gracefully()
+		async for message in ws:
+			await on_message(ws, client, message)
+	except websockets.ConnectionClosed:
+		pass
+	except (asyncio.exceptions.CancelledError, KeyboardInterrupt):
+		print("shutting down...")
+		return
+	except: traceback.print_exc()
+	finally:
+		del g.clients[client_id]
+		await on_client_disconnect(ws, client_id)
+
+async def main():
+		g.speech_requests = {}
+		g.voices = {}
+		g.clients = {}
+		async with websockets.serve(client_handler, "0.0.0.0", 7774):
+			print("WebSocket server started.")
+			await asyncio.Future()
 
 if __name__ == "__main__":
-	main()
+	try:
+		asyncio.run(main())
+	except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
+		print("good bye")
