@@ -51,13 +51,13 @@ def synthesize_to_wave(event):
 			os.remove("tmp.aiff")
 		# Read the wave file and encode it to base64
 		with open(fp.name, "rb") as wave_file:
-			wave_data = base64.b64encode(wave_file.read()).decode("utf-8")
+			wave_data = wave_file.read()
 		os.unlink(fp.name)
 	except Exception as e:
 		print(e)
 		engine.stop()
 		engine = pyttsx3.init()
-		return ""
+		return b""
 	return wave_data
 
 # WebSocket handling
