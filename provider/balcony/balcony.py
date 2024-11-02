@@ -43,7 +43,7 @@ async def synthesize_to_wave(event):
 		return wave_data
 	except Exception as e:
 		print(e)
-		return ""
+		return b""
 
 # Helper function to read binary file data
 def read_wave_file(filename):

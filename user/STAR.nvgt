@@ -117,16 +117,16 @@ void send_request(const string&in text, bool rendering) {
 	result["user"] = 2;
 	string[]@ raw_lines = text.split("\r\n", false);
 	if (rendering) {
-		item_count = raw_lines.length();
 		form.set_caption(f_render, "Cancel");
 		play("begin");
 	}
 	json_array lines;
 	for (uint i = 0; i < raw_lines.length(); i++) {
 		string l = raw_lines[i].trim_whitespace();
-		if (l.starts_with(";")) continue;
+		if (l.empty() or l.starts_with(";")) continue;
 		lines.add(l);
 	}
+	if (rendering) item_count = lines.length();
 	result["request"] = lines;
 	send_queue.enqueue_message(result);
 }
@@ -239,7 +239,7 @@ void main() {
 				if (old_count > 0) speak(v_dif + " voice"+(v_dif != 1 ? "s" : "") + " added.");
 			} else if (v_dif < 0) {
 				play("voices_disconnect");
-				speak(v_dif + " voice"+(v_dif != 1 ? "s" : "") + " removed.");
+				speak(abs(v_dif) + " voice"+(v_dif != 1 ? "s" : "") + " removed.");
 			}
 			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
