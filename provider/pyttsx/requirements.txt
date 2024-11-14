@@ -1,3 +1,0 @@
-websockets
-configobj
-git+https://github.com/nateshmbhat/pyttsx3/

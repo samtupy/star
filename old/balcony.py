@@ -34,8 +34,8 @@ async def synthesize_to_wave(event):
 		with tempfile.NamedTemporaryFile(delete=False) as fp:
 			fp.close()
 		extra_args = ["-n", event["voice"], "-t", event["text"], "-w", fp.name]
-		if "rate" in event: extra_args += ["-s", str(int(event["rate"]))]
-		if "pitch" in event: extra_args += ["-p", str(int(event["pitch"]))]
+		if "rate" in event: extra_args += ["-s", str(float(event["rate"]))]
+		if "pitch" in event: extra_args += ["-p", str(float(event["pitch"]))]
 		process = await asyncio.create_subprocess_exec("balcon", *extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NO_WINDOW)
 		await process.communicate()
 		wave_data = await asyncio.to_thread(read_wave_file, fp.name)
@@ -91,11 +91,14 @@ async def handle_websocket():
 			print(f"reconnecting... {e}")
 			time.sleep(3)
 
+async def handle_websockets():
+	await asyncio.gather(handle_websocket(), handle_websocket())
+
 # Main entry point
 if __name__ == "__main__":
 	while True:
 		try:
-			asyncio.run(handle_websocket())
+			asyncio.run(handle_websockets())
 		except KeyboardInterrupt:
 			print("shutting down")
 			break

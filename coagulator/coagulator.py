@@ -25,9 +25,9 @@ def parse_speech_meta(meta):
 		try:
 			key, value = p.strip().split("=")
 			if key == "r":
-				result["rate"] = float(value)
+				result["rate"] = value
 			elif key == "p":
-				result["pitch"] = float(value)
+				result["pitch"] = value
 		except ValueError:
 			continue
 	return result
@@ -102,6 +102,9 @@ async def on_message(ws, client, message):
 				gained_voice = True
 		if gained_voice:
 			await notify_all_clients({"voices": list(g.voices)}, [client["id"]])
+	elif "provider" in msg and "status" in msg and "id" in msg and msg["id"] in g.speech_requests:
+		await g.speech_requests[msg["id"]]["ws"].send(message)
+		if "abort" in msg and msg["abort"]: del g.speech_requests[msg["id"]]
 	elif "user" in msg:
 		if msg["user"] < g.user_rev:
 			await ws.send(json.dumps({"error": f"must be revision {g.user_rev} or higher"}))

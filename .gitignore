@@ -1,8 +1,9 @@
 __pycache__
-provider/balcony/*.exe
-provider/*/build
-provider/*/dist
+build
+dist
+provider/*.exe
 user/output
 user/STAR
 user/*.zip
+venv
 *.spec

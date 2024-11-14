@@ -1,0 +1,5 @@
+argparse
+configobj
+pyinstaller
+toga
+websockets

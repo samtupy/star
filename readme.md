@@ -1,3 +1,6 @@
+## WARNING!
+This repository is under heavy development as I work on polishing this project. Until this notice disappears, please expect documentation to be incomplete/out of date and understand that you may find this program confusing to build / use and I will likely provide little support until documentation and polishing is complete.
+
 # Speech To Audio Relay (STAR)
 This is a set of components intended to ease the creation of audio productions that involve the synthesis of text to speech to audio, particularly where many voices that might be contained on any number of different computers or devices are involved.
 
@@ -40,3 +43,5 @@ where ID is the same as that received in the voice packet's id key.
 
 Voice packets might contain extra parameters like rate and pitch, but your providers should be set up to not require these.
 
+## Disclaimer
+This is a tool created with the intention of making it possible for small groups of friends to create tts audio skits and dramas with increased colaberation, or even so that somebody can network all of their local voices together with fewer cables and hastles. By no means is this intended to deprive voice creators of income / hurt them in any way / disrespect their terms of service. Sharing access to voices that disallow such distrobution in their license agreements, particularly beyond small groups of friends, goes against the intended use I had in mind for this project and I expressly disclaim any responsibility for such misuse of the program. Please use this tool respectfully!
