@@ -150,8 +150,9 @@ sound demo;
 dictionary demo_cache;
 string last_demoed_line;
 ini config("STAR.ini");
+int old_soundcard=0;
 int render_count = 0, item_count = 0;
-int f_voices, f_quickspeak, f_script, f_render, f_exit;
+int f_voices, f_quickspeak, f_script, f_soundcard, f_render, f_stop, f_exit;
 int render_ID = 0x7fff;
 void setup_interface() {
 	show_window("STAR client");
@@ -160,7 +161,11 @@ void setup_interface() {
 	f_voices = form.create_list("available &voices");
 	f_quickspeak = form.create_input_box("&quickspeak", multiline:true, multiline_enter:false);
 	f_script = form.create_input_box("enter &script", multiline:true);
+	f_soundcard = form.create_list("available &output devices");
+	for (uint i=0; i<sound_output_devices.length(); i++)
+		form.add_list_item(f_soundcard,sound_output_devices[i]);
 	f_render = form.create_button("&render to wav");
+	f_stop = form.create_button("s&top any playing audio");
 	f_exit = form.create_button("e&xit", false, true);
 	form.focus(f_script);
 }
@@ -208,6 +213,10 @@ void main() {
 			}
 			if (key_pressed(KEY_SPACE)) starspeak(form.get_list_item(f_voices, form.get_list_position(f_voices)) + ": Hello there, my name is " + form.get_list_item(f_voices, form.get_list_position(f_voices)));
 		}
+		if (form.get_current_focus() == f_soundcard and old_soundcard!=form.get_list_position(f_soundcard)) {
+			old_soundcard=form.get_list_position(f_soundcard);
+			sound_output_device=old_soundcard;
+		}
 		if (form.get_current_focus() == f_quickspeak and keyboard_modifiers & KEYMOD_CTRL == 0 and keyboard_modifiers & KEYMOD_SHIFT == 0) {
 			if (key_pressed(KEY_RETURN)) {
 				string text = form.get_text(f_quickspeak);
@@ -217,6 +226,9 @@ void main() {
 			}
 		}
 		form.monitor();
+		if (form.is_pressed(f_stop)) {
+			if (demo.playing) demo.stop();
+		}
 		if (form.is_pressed(f_render)) {
 			if (item_count > 0) {
 				speak("Rendering in progress, will add canceling ability soon");
@@ -241,8 +253,10 @@ void main() {
 				play("voices_disconnect");
 				speak(abs(v_dif) + " voice"+(v_dif != 1 ? "s" : "") + " removed.");
 			}
+			int old_index=form.get_list_position(f_voices);
 			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
+			if (old_index<form.get_list_count(f_voices)) form.set_list_position(f_voices,old_index);
 		} else if (msg.exists("warning") or msg.exists("status")) {
 			play("warning");
 			if (item_count > 0) render_count++;

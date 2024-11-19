@@ -1,0 +1,9 @@
+// This helper script, along with NVGTV.py, provides the NVGT fallback voice to Star.
+// Command Line Perametors: The first perametor is the filename, and the rest is the text.
+// Compile NVGTV.NVGT with NVGT, and place the resulting lib and exe folder in the same directory as NVGTV.py.
+tts_voice v;
+void main()
+{
+v.set_voice(0);
+file_put_contents(ARGS[1],v.speak_to_memory(join(ARGS," ").replace(ARGS[1],"")));
+}
