@@ -152,7 +152,7 @@ string last_demoed_line;
 ini config("STAR.ini");
 int old_soundcard=0;
 int render_count = 0, item_count = 0;
-int f_voices, f_quickspeak, f_script, f_soundcard, f_render, f_exit;
+int f_voices, f_quickspeak, f_script, f_soundcard, f_render, f_stop, f_exit;
 int render_ID = 0x7fff;
 void setup_interface() {
 	show_window("STAR client");
@@ -165,6 +165,7 @@ void setup_interface() {
 	for (uint i=0; i<sound_output_devices.length(); i++)
 		form.add_list_item(f_soundcard,sound_output_devices[i]);
 	f_render = form.create_button("&render to wav");
+	f_stop = form.create_button("s&top any playing audio");
 	f_exit = form.create_button("e&xit", false, true);
 	form.focus(f_script);
 }
@@ -225,6 +226,9 @@ void main() {
 			}
 		}
 		form.monitor();
+		if (form.is_pressed(f_stop)) {
+			if (demo.playing) demo.stop();
+		}
 		if (form.is_pressed(f_render)) {
 			if (item_count > 0) {
 				speak("Rendering in progress, will add canceling ability soon");
