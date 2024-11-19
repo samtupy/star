@@ -253,8 +253,10 @@ void main() {
 				play("voices_disconnect");
 				speak(abs(v_dif) + " voice"+(v_dif != 1 ? "s" : "") + " removed.");
 			}
+			int old_index=form.get_list_position(f_voices);
 			form.clear_list(f_voices);
 			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
+			if (old_index<form.get_list_count(f_voices)) form.set_list_position(f_voices,old_index);
 		} else if (msg.exists("warning") or msg.exists("status")) {
 			play("warning");
 			if (item_count > 0) render_count++;
