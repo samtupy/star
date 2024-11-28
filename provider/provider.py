@@ -19,7 +19,7 @@ class star_provider_configurator(toga.App):
 	"""This is a small Toga app that allows one to configure the provider with a list of hosts to connect to, and any other future options."""
 	def __init__(self, provider):
 		self.provider = provider
-		toga.App.__init__(self, "STAR provider configuration", "com.samtupy.StarProvider")
+		toga.App.__init__(self, "STAR provider configuration", "com.samtupy.STARProvider")
 	def focus_settings(self):
 		self.main_window.content = self.settings
 		self.widgets["save_btn"].focus()
@@ -147,7 +147,7 @@ class star_provider:
 		"""Synthesizes some text, should return a bytes object containing the audio data (usually a playable wav file), or a string with an error message. The default implementation uses the executable and arguments defined by self.synthesis_process, allowing any providers that use external applications to be implemented almost instantly!"""
 		if not hasattr(self, "synthesis_process"): return f"no method provided for synthesis of {voice}"
 		try:
-			with tempfile.NamedTemporaryFile(delete=False) as fp:
+			with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
 				fp.close()
 			args = []
 			for arg in self.synthesis_process: args.append(arg.format(voice = voice, text = text, rate = rate if rate is not None else 0, pitch = pitch if pitch is not None else 0, filename = fp.name))
@@ -155,7 +155,7 @@ class star_provider:
 				for arg in self.synthesis_process_rate: args.append(arg.format(rate = rate))
 			if pitch is not None and hasattr(self, "synthesis_process_pitch"):
 				for arg in self.synthesis_process_pitch: args.append(arg.format(pitch = pitch))
-			process = await asyncio.create_subprocess_exec(*args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NO_WINDOW)
+			process = await asyncio.create_subprocess_exec(*args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
 			await process.communicate()
 			wave_data = b""
 			with open(fp.name, "rb") as f: wave_data = f.read()
