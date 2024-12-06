@@ -1,3 +1,5 @@
+// This is the original STAR client written in NVGT. The initial reason that sparked a rewrite to python was that low vision rather than just blind users became interested in this program and wanted a proper GUI, also it just seemed more prudent to make this a purely python project and to let NVGT excelle at what it was intended for which was audio game design rather than utility programs.
+
 #include "form.nvgt"
 #include "ini.nvgt"
 #pragma asset audio

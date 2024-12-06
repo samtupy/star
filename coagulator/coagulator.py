@@ -74,7 +74,7 @@ async def handle_speech_request(client, request, id=""):
 		client["speech_sequence"] += 1
 		meta.update({"text": text, "id": f"{client['id']}{id}_{client['speech_sequence']}"})
 		await provider.send(json.dumps(meta))
-		g.speech_requests[meta["id"]] = client
+		g.speech_requests[meta["id"]] = (client, provider)
 
 async def on_message(ws, client, message):
 	"""Handles incoming WebSocket messages."""
@@ -82,7 +82,7 @@ async def on_message(ws, client, message):
 		req_len = int.from_bytes(message[:2], "little")
 		req = message[2:req_len+2].decode()
 		if req in g.speech_requests: 
-			await g.speech_requests[req]["ws"].send(message)
+			await g.speech_requests[req][0]["ws"].send(message)
 			del g.speech_requests[req]
 		return
 	try:
@@ -103,7 +103,7 @@ async def on_message(ws, client, message):
 		if gained_voice:
 			await notify_all_clients({"voices": list(g.voices)}, [client["id"]])
 	elif "provider" in msg and "status" in msg and "id" in msg and msg["id"] in g.speech_requests:
-		await g.speech_requests[msg["id"]]["ws"].send(message)
+		await g.speech_requests[msg["id"]][0]["ws"].send(message)
 		if "abort" in msg and msg["abort"]: del g.speech_requests[msg["id"]]
 	elif "user" in msg:
 		if msg["user"] < g.user_rev:
@@ -111,6 +111,10 @@ async def on_message(ws, client, message):
 			return
 		if "request" in msg:
 			await handle_speech_request(client, msg["request"], str(msg.get("id", "")))
+		elif "command" in msg:
+			if msg["command"] == "abort":
+				for req_id, req in enumerate(g.speech_requests):
+					if req[0] == websocket: await req[1].send(json.dumps({"abort": req_id}))
 		else:
 			await ws.send(json.dumps({"voices": list(g.voices)}))
 
@@ -130,7 +134,9 @@ async def on_client_disconnect(ws, client_id):
 				lost_voice = True
 	if lost_voice: await notify_all_clients({"voices": list(g.voices)}, [client_id])
 	for r in list(g.speech_requests):
-		if g.speech_requests[r]["ws"] == ws:
+		if g.speech_requests[r][1] == ws:
+			await g.speech_requests[r][0]["ws"].send(json.dumps({"warning": f"provider servicing request {r} disappeared", "request_id": r}))
+		if g.speech_requests[r][0]["ws"] == ws or g.speech_requests[r][1] == ws:
 			del g.speech_requests[r]
 
 async def client_handler(ws):

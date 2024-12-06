@@ -3,3 +3,5 @@ configobj
 pyinstaller
 toga
 websockets
+wxasync
+WXPython
