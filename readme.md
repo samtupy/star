@@ -23,7 +23,9 @@ Pretty much this entire project is written in python sans a couple of providers 
 2. Activate the virtual environment you just created: on windows `venv\scripts\activate`, on MacOS `source venv/bin/activate`, or on Linux `venv/bin/activate`
 3. Install requirements: `pip install -r requirements.txt`
 4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory.
-From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do. If you want to create a complete local stack in one shell window, at least on windows you can use pythonw instead of python to run the coagulator and the provider in windows mode which will not block your terminal.
+From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do.
+
+If you want to create a complete local stack in one shell window, at least on windows you can use pythonw instead of python to run the coagulator and the provider in windows mode which will not block your terminal.
 
 If you wish to build the binaries, you can run pyinstaller STAR.spec from the repository's root directory.
 
@@ -58,6 +60,7 @@ star_provider("sammy", voices = "microsam", synthesis_process = ["sam", "-wav", 
 ```
 The constructor for the STAR provider class is as follows:
 `def __init__(self, provider_basename = os.path.splitext(sys.argv[0])[0], handle_argv = True, run_immedietly = True, voices = None, synthesis_process = None, synthesis_process_rate = None, synthesis_process_pitch = None)`
+
 Arguments:
 * provider_basename: This is used to name the provider's configuration file, show error messages, or anything else where a generic name string can be useful. Should be a valid file basename.
 * handle_argv: By default, the provided provider facility can handle various command line arguments which control things like what config file to load and more. You can disable this switch if you want to disable this for your provider.
