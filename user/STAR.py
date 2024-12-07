@@ -1,3 +1,5 @@
+import accessible_output2.outputs.zdsr
+del(accessible_output2.outputs.zdsr.output_class)
 import accessible_output2.outputs.auto
 import asyncio
 import atexit

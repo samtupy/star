@@ -7,4 +7,4 @@ user/output
 user/STAR
 user/*.zip
 venv
-*.spec
+*.ini
