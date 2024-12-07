@@ -11,95 +11,93 @@ import subprocess
 import sys
 import tempfile
 import time
-import toga
 import traceback
 import websockets.asyncio.client
+import wx
 
-class star_provider_configurator(toga.App):
-	"""This is a small Toga app that allows one to configure the provider with a list of hosts to connect to, and any other future options."""
+class voice_edit_dialog(wx.Dialog):
+	"""This is a subdialog of the below star_provider_configurator dialog which handles editing properties for a single voice."""
+	def __init__(self, parent, voice = {}):
+		wx.Dialog.__init__(self, parent, title = "Edit Voice")
+		self.CreateButtonSizer(wx.OK | wx.CANCEL)
+		self.enabled = wx.CheckBox(self, label = "&Enable Voice")
+		self.enabled.Value = voice["enabled"] if "enabled" in voice else True
+		wx.StaticText(self, -1, "Voice &Alias")
+		self.alias = wx.TextCtrl(self, value = voice["alias"] if "alias" in voice else "")
+		self.enabled.SetFocus()
+	def dump(self, v):
+		"""Writes the user provided values to the given voice item."""
+		v["enabled"] = self.enabled.Value
+		if self.alias.Value: v["alias"] = self.alias.Value
+		elif "alias" in v: del(v["alias"])
+
+class voices_list(wx.ListCtrl):
+	"""The voices list is implemented in virtual mode as it may contain a large number of items and , this class facilitates that."""
+	def __init__(self, parent, *args, **kwargs):
+		wx.ListCtrl.__init__(self, parent, *args, **kwargs)
+		self.AppendColumn("voice name")
+		self.AppendColumn("Enabled")
+		self.AppendColumn("Alias")
+		self.SetItemCount(len(parent.provider.voices))
+		self.voice_names = list(parent.provider.voices)
+	def OnGetItemText(self, item, column):
+		v = self.Parent.provider.voices[self.voice_names[item]]
+		if column == 0: return self.voice_names[item]
+		elif column == 1: return "Yes" if v["enabled"] else "No"
+		elif column == 2: return v["alias"] if "alias" in v else ""
+
+class star_provider_configurator(wx.Dialog):
+	"""This dialog allows for a GUI based method of configuring all aspects of a provider."""
 	def __init__(self, provider):
+		wx.Dialog.__init__(self, None, title = "STAR Provider Configuration")
 		self.provider = provider
-		toga.App.__init__(self, "STAR provider configuration", "com.samtupy.STARProvider")
-	def focus_settings(self):
-		self.main_window.content = self.settings
-		self.widgets["save_btn"].focus()
-	def focus_mod_host(self):
-		self.main_window.content = self.mod_host
-		self.widgets["mod_host_input"].focus()
-	def focus_mod_voice(self, voice_id):
-		self.main_window.content = self.mod_voice
-		self.widgets["mod_voice_alias_input"].value = self.provider.voices[voice_id]["alias"] if "alias" in self.provider.voices[voice_id] else ""
-		self.widgets["mod_voice_enable"].value = self.provider.voices[voice_id]["enabled"]
-		self.widgets["mod_voice_alias_label"].text = f"&Alias for {self.provider.voices[voice_id]['id']}"
-		self.widgets["mod_voice_alias_input"].focus()
-	def on_save_btn(self, button):
+		self.CreateButtonSizer(wx.OK | wx.CANCEL)
+		wx.StaticText(self, -1, "&Hosts")
+		self.hosts_list = wx.ListCtrl(self, style = wx.LC_SINGLE_SEL | wx.LC_LIST)
+		self.hosts_list.AppendColumn("Host")
+		for h in provider.hosts: self.hosts_list.Append([h])
+		delete_host_id = wx.NewIdRef()
+		self.hosts_list.Bind(wx.EVT_MENU, self.on_delete_host, id = delete_host_id)
+		self.hosts_list.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_DELETE, delete_host_id)]))
+		self.hosts_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_edit_host)
+		wx.Button(self, label = "&New host...").Bind(wx.EVT_BUTTON, self.on_new_host)
+		wx.StaticText(self, -1, "&Voices")
+		self.voices_list = voices_list(self, style = wx.LC_SINGLE_SEL | wx.LC_REPORT | wx.LC_VIRTUAL)
+		self.voices_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_edit_voice)
+		self.hosts_list.Focus(0)
+		self.hosts_list.SetFocus()
+	def host_dlg(self, value = ""):
+		dlg = wx.TextEntryDialog(self, "Host", "Enter a valid websocket URI E. ws://127.0.0.1:7774", value)
+		if dlg.ShowModal() != wx.ID_OK: return ""
+		return dlg.Value
+	def on_new_host(self, evt):
+		h = self.host_dlg()
+		if not h: return
+		self.hosts_list.Append([h])
+		self.hosts_list.SetFocus()
+	def on_edit_host(self, evt):
+		h = self.host_dlg(evt.Label)
+		if not h: return
+		self.hosts_list.SetItemText(evt.Index, h)
+		self.hosts_list.SetFocus()
+	def on_delete_host(self, evt):
+		h = self.hosts_list.FocusedItem
+		if h < 0: return
+		self.hosts_list.DeleteItem(h)
+	def on_edit_voice(self, evt):
+		dlg = voice_edit_dialog(self, self.provider.voices[self.voices_list.voice_names[evt.Index]])
+		if dlg.ShowModal() != wx.ID_OK: return
+		dlg.dump(self.provider.voices[self.voices_list.voice_names[evt.Index]])
+	def save(self):
 		c = configobj.ConfigObj(self.provider.config_filename)
-		c["hosts"] = [i.url for i in self.hosts_list.data]
-		for voice in self.voices_list.data:
-			if not voice.enabled or hasattr(voice, "alias") and voice.alias:
+		c["hosts"] = [self.hosts_list.GetItemText(i) for i in range(self.hosts_list.GetItemCount())]
+		for voice in self.provider.voices:
+			voice = self.provider.voices[voice]
+			if not voice["enabled"] or "alias" in voice and voice["alias"]:
 				if not "voices" in c: c["voices"] = {}
-				c["voices"][voice.id] = {"alias": voice.alias, "enabled": voice.enabled}
-			elif "voices" in c and voice.id in c["voices"]: del(c["voices"][voice.id])
+				c["voices"][voice["id"]] = {"alias": voice["alias"] if "alias" in voice else "", "enabled": voice["enabled"]}
+			elif "voices" in c and voice["id"] in c["voices"]: del(c["voices"][voice["id"]])
 		c.write()
-		self.request_exit()
-	async def on_voice_edit_btn(self, button):
-		sel = self.voices_list.selection
-		if not sel: return await self.main_window.dialog(toga.InfoDialog("error", "no voice selected"))
-		self.modding_voice = self.voices_list.data.index(sel)
-		self.focus_mod_voice(sel.id)
-	def on_hosts_new_btn(self, button):
-		self.modding_host = -1
-		self.focus_mod_host()
-	async def on_hosts_edit_btn(self, button):
-		sel = self.widgets["hosts_list"].selection
-		if not sel: return await self.main_window.dialog(toga.InfoDialog("error", "no host selected"))
-		self.modding_host = self.hosts_list.data.index(sel)
-		self.mod_host_input.value = sel.url
-		self.focus_mod_host()
-	async def on_hosts_delete_btn(self, button):
-		sel = self.widgets["hosts_list"].selection
-		if not sel: return await self.main_window.dialog(toga.InfoDialog("error", "no host selected"))
-		self.widgets["hosts_list"].data.remove(sel)
-	async def on_mod_host_save(self, button):
-		h = self.widgets["mod_host_input"].value
-		self.widgets["mod_host_input"].value = ""
-		if self.modding_host == -1: self.hosts_list.data.append((h))
-		else: self.hosts_list.data[self.modding_host] = (h)
-		self.focus_settings()
-	async def on_mod_voice_save(self, button):
-		self.voices_list.data[self.modding_voice].alias = self.widgets["mod_voice_alias_input"].value
-		self.voices_list.data[self.modding_voice].enabled = self.widgets["mod_voice_enable"].value
-		self.focus_settings()
-	def on_setting_cancel(self, button):
-		self.focus_settings()
-	def startup(self):
-		self.main_window = toga.MainWindow()
-		self.settings = toga.Box()
-		voices_label = toga.Label("&Voices");
-		self.voices_list = toga.Table(headings = ["full name", "enabled", "alias"], data = [self.provider.voices[v] for v in self.provider.voices])
-		voice_edit_btn = toga.Button("Edi&t voice...", on_press = self.on_voice_edit_btn);
-		hosts_label = toga.Label("&Hosts", id = "hosts_label")
-		self.hosts_list = toga.Table(id = "hosts_list", headings = ["URL"], data = [(i) for i in self.provider.hosts])
-		hosts_new_btn = toga.Button("&New host...", on_press = self.on_hosts_new_btn);
-		hosts_edit_btn = toga.Button("&Edit host...", on_press = self.on_hosts_edit_btn);
-		hosts_delete_btn = toga.Button("&Delete host...", id = "hosts_delete_btn", on_press = self.on_hosts_delete_btn);
-		save_btn = toga.Button("&Save", id = "save_btn", on_press = self.on_save_btn)
-		self.settings.add(voices_label, self.voices_list, voice_edit_btn, hosts_label, self.hosts_list, hosts_new_btn, hosts_edit_btn, hosts_delete_btn, save_btn)
-		self.settings = toga.ScrollContainer(content = self.settings)
-		mod_host_label = toga.Label("&Host")
-		self.mod_host_input = toga.TextInput(id = "mod_host_input", on_confirm = self.on_mod_host_save)
-		mod_host_save = toga.Button("ok", on_press = self.on_mod_host_save)
-		mod_host_cancel = toga.Button("Cancel", on_press = self.on_setting_cancel)
-		self.mod_host = toga.Box(children = [mod_host_label, self.mod_host_input, mod_host_save, mod_host_cancel])
-		mod_voice_alias_label = toga.Label("&Alias for voice", id = "mod_voice_alias_label")
-		self.mod_voice_alias_input = toga.TextInput(id = "mod_voice_alias_input", on_confirm = self.on_mod_voice_save)
-		mod_voice_enable = toga.Switch("&Enable voice", id = "mod_voice_enable")
-		mod_voice_save = toga.Button("ok", on_press = self.on_mod_voice_save)
-		mod_voice_cancel = toga.Button("Cancel", on_press = self.on_setting_cancel)
-		self.mod_voice = toga.Box(children = [mod_voice_alias_label, self.mod_voice_alias_input, mod_voice_enable, mod_voice_save, mod_voice_cancel])
-		self.main_window.show()
-	def on_running(self):
-		self.focus_settings()
 
 class star_provider:
 	"""A base class that can be used to implement any STAR provider able to be written in Python3. It abstracts all communication with coagulators, as much of the async stuff as possible, filtering voice names and more. This class should not be instantiated directly, but instead only it's children."""
@@ -217,5 +215,7 @@ class star_provider:
 				print("reconnecting... {e}")
 				time.sleep(10)
 	def configuration_interface(self):
-		star_provider_configurator(self).main_loop()
+		if not wx.GetApp(): app = wx.App()
+		c = star_provider_configurator(self)
+		if c.ShowModal() == wx.ID_OK: c.save()
 

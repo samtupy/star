@@ -1,5 +1,4 @@
 import accessible_output2.outputs.zdsr
-del(accessible_output2.outputs.zdsr.output_class)
 import accessible_output2.outputs.auto
 import asyncio
 import atexit
@@ -8,6 +7,7 @@ import glob
 import json
 import miniaudio
 import os
+import pydub
 import time
 import traceback
 import websockets.asyncio.client
@@ -103,14 +103,16 @@ def render_filename_tokens_help():
 
 class render_filename:
 	"""A small container class to store various properties about an item that is being rendered for the purposes of generating a valid custom filename, done this way so that render token lambdas have easy access to the data they need. Construct this object with valid arguments then access the filename property."""
-	def __init__(self, counter, line, voice, text):
+	def __init__(self, counter, line, voice, text, template = None):
 		self.counter = counter
 		self.line = line
 		self.voice = voice
 		self.text = text
+		self.template = config.get("render_filename_template", "{counter01}") if not template else template
 	@property
 	def filename(self):
-		return config.get("render_filename_template", "{counter01}").format(**{r[0]: r[2](self) for r in render_filename_tokens})
+		try: return self.template.format(**{r[0]: r[2](self) for r in render_filename_tokens})
+		except Exception as e: return e
 
 class voices_list(wx.ListCtrl):
 	"""The voices list is implemented in virtual mode as it may contain a large number of items, this class facilitates that."""
@@ -132,6 +134,7 @@ class done_speaking_event(wx.PyEvent):
 class star_client_configuration(wx.Dialog):
 	"""This dialog is activated when the user clicks the options button in the main window."""
 	def __init__(self, parent):
+		"""Composes the UI elements for the dialog."""
 		wx.Dialog.__init__(self, parent, title = "STAR Client Configuration")
 		host_label = wx.StaticText(self, -1, "&Host to connect to")
 		self.host = wx.TextCtrl(self, value = config.get("host", ""))
@@ -157,16 +160,30 @@ class star_client_configuration(wx.Dialog):
 		self.Parent.speech_cache = {}
 		self.clear_cache_btn.Enabled = False
 	async def validate(self):
+		render_fn = render_filename(1, 10, "Voice", "Text string", self.render_filename_template.Value).filename
 		is_uri = is_valid_ws_uri(self.host.Value)
 		if type(is_uri) == str:
 			await AsyncShowDialogModal(wx.MessageDialog(self, f"host {is_uri}", "error"))
 			self.host.SetFocus()
-			return False
-		return True
+		elif not self.render_path.Path:
+			await AsyncShowDialogModal(wx.MessageDialog(self, "no render path provided", "error"))
+			self.render_path.SetFocus()
+		elif not self.render_filename_template.Value:
+			await AsyncShowDialogModal(wx.MessageDialog(self, "no render filename template provided", "error"))
+			self.render_filename_template.SetFocus()
+		elif type(render_fn) != str:
+			await AsyncShowDialogModal(wx.MessageDialog(self, f"Invalid render filename template {render_fn}", "error"))
+			self.render_filename_template.SetFocus()
+		elif not self.voice_preview_text.Value:
+			await AsyncShowDialogModal(wx.MessageDialog(self, "voice preview text must not be empty", "error"))
+			self.voice_preview_text.SetFocus()
+		else: return True
+		return False
 
 class star_client(wx.Frame):
 	"""The main STAR client application."""
 	def __init__(self, parent = None):
+		"""The function that sets up and composes the app, from it's UI elements to the remote websocket connection."""
 		wx.Frame.__init__(self, parent, title = "STAR Client")
 		self.configuration = star_client_configuration(self)
 		self.main_panel = wx.Panel(self)
@@ -232,6 +249,7 @@ class star_client(wx.Frame):
 		self.Show()
 		self.connection_task = StartCoroutine(self.connect(config.get("host", "")), self)
 	def on_copy_voicename(self, evt):
+		"""Copies the currently focused voice name to the clipboard, called when ctrl+c is pressed on a voice name in the voices list."""
 		voice = self.voices_list.FocusedItem
 		if voice < 0 or voice >= len(self.voices):
 			speech.speak("not focused on a voice")
@@ -241,8 +259,11 @@ class star_client(wx.Frame):
 			wx.TheClipboard.Close()
 		speech.speak("copied")
 	async def on_preview_voice(self, evt):
+		"""This is called when a voice in the voices list is activated, speaks a small sample of the voice."""
+		self.script_continuous_preview = False
 		await self.audiospeak(f"{evt.Label}: {config.get('voice_preview_text', 'Hello there, my name is {voice}.').format(voice = evt.Label)}")
 	async def on_quickspeak(self, evt):
+		"""Called when enter is pressed in the quickspeak text field, composes a simple speech request based on the current field value and speaks it."""
 		voice = self.voices_list.FocusedItem
 		if voice < 0 or voice >= len(self.voices):
 			speech.speak("not focused on a voice")
@@ -250,8 +271,10 @@ class star_client(wx.Frame):
 		if not self.quickspeak.Value:
 			speech.speak("nothing to speak")
 			return
+		self.script_continuous_preview = False
 		await self.audiospeak(f"{self.voices[voice]}: {self.quickspeak.Value.replace("\n", "  ")}")
 	async def on_preview_script(self, evt):
+		"""The script previewing facility, handles ctrl+alt+(space, up and down) calling self.audiospeak for each speech line detected."""
 		pos = self.script.GetInsertionPoint()
 		b, col, line = self.script.PositionToXY(pos)
 		if evt.Id == self.preview_prev_id: line -= 1
@@ -265,6 +288,7 @@ class star_client(wx.Frame):
 		if not line_text or line_text.startswith(";"): return
 		await self.audiospeak(line_text)
 	def on_auto_preview_next_script_line(self, evt):
+		"""This method gets called after a speech event has finished if the continuous script preview is active."""
 		text = ""
 		b, col, line = self.script.PositionToXY(self.script.GetInsertionPoint())
 		while not text:
@@ -280,6 +304,7 @@ class star_client(wx.Frame):
 				continue
 		StartCoroutine(self.audiospeak(text), self)
 	async def on_render(self, evt):
+		"""The bulk of the rendering facility (called when Render to Wav is pressed), this method prepares renderable lines from the script and calls self.audiospeak for each event."""
 		script = self.script.Value.strip()
 		if not script: return await AsyncShowDialogModal(wx.MessageDialog(self, "You must provide a script for rendering", "error"))
 		lines = script.split("\n")
@@ -301,13 +326,14 @@ class star_client(wx.Frame):
 		self.render_btn.Label = "Cancel"
 		self.render_total = len(renderable_lines)
 		for l in renderable_lines: await self.audiospeak(l[1], render_filename = l[0])
-	def on_render_complete(self):
+	def on_render_complete(self, canceled = False):
+		"""This is called on completion or cancelation of a render, and handles any UI work involved in displaying this fact while preparing for a new render."""
 		self.rendered_items = 0
 		self.render_total = 0
 		self.render_btn.Label = "&Render to Wav"
-		playsound("audio/complete.ogg")
+		playsound("audio/complete.ogg" if not canceled else "audio/cancel.ogg")
 	async def on_options(self, evt = None):
-		global config
+		"""Shows the options dialog and handles the saving of settings, either called as an event handler of the options button or else manually."""
 		while True:
 			r = await AsyncShowDialogModal(self.configuration)
 			if r != wx.ID_OK: break
@@ -325,11 +351,13 @@ class star_client(wx.Frame):
 		else: self.connecting_panel.SetFocus()
 	def on_exit_btn(self, evt): self.Close()
 	def on_stop_speaking(self, evt):
+		"""Called when the user presses alt+backspace, stops any currently playing speech."""
 		if not self.current_speech: return
 		self.current_speech.close()
 		self.current_speech = None
 		self.script_continuous_preview = False
 	def reconnect(self):
+		"""Reestablishes the remote websocket connection, typically called if the host address is updated in the options dialog."""
 		if self.connection_task: self.connection_task.cancel()
 		self.initial_connection = False
 		self.speech_requests = {}
@@ -342,6 +370,7 @@ class star_client(wx.Frame):
 		self.main_panel.Hide()
 		self.connection_task = StartCoroutine(self.connect(config.get("host", "")), self)
 	async def connect(self, host):
+		"""The bulk of the websocket handling logic, runs as an asynchronous task during the entire live state of a connection and calls into various helper methods such as on_connect, on_remote_binary, on_remote_message etc."""
 		if not host: return
 		should_exit = False
 		while not should_exit:
@@ -369,6 +398,7 @@ class star_client(wx.Frame):
 				print(f"reconnecting to {host}... {e}")
 				asyncio.sleep(3)
 	async def on_connect(self, websocket):
+		"""This function is fired on every successful websocket connection and is responsible for any UI modifications, server hello, and post-connection-setup required."""
 		await websocket.send(json.dumps({"user": USER_REVISION}))
 		self.websocket = websocket
 		if not self.initial_connection:
@@ -377,11 +407,13 @@ class star_client(wx.Frame):
 			self.main_panel.Show()
 			self.main_panel.SetFocus()
 	def on_remote_binary(self, websocket, message):
+		"""Handles any remote binary messages received from the server, mostly a jumping off point to self.on_remote_audio after some parsing."""
 		if len(message) < 4: return
 		id_len = int.from_bytes(message[:2], "little")
 		id = message[2:id_len+2].partition(b"_")[2].partition(b"_")[0].decode()
 		self.on_remote_audio(id, message[id_len+2:])
 	def on_remote_message(self, websocket, message):
+		"""Handles a parsed json payload received from the remote server."""
 		if "voices" in message:
 			playsound("audio/ready.ogg")
 			if len(message["voices"]) > len(self.voices): playsound("audio/voices_connect.ogg")
@@ -403,6 +435,7 @@ class star_client(wx.Frame):
 			speech.speak(message["warning"])
 			if hasattr(self, "render_items"): self.render_items += 1
 	def on_remote_audio(self, id, audio):
+		"""Handles a remote audio payload, speaking it or saving it as a rendered item. Usually called from handle_remote_binary"""
 		if not id in self.speech_requests: return # We should error about this somehow?
 		r = self.speech_requests.pop(id)
 		self.speech_cache[r.textline] = audio
@@ -439,4 +472,4 @@ async def main():
 	client = star_client()
 	await app.MainLoop()
 
-asyncio.run(main())
+if __name__ == "__main__": asyncio.run(main())

@@ -152,6 +152,6 @@ coll = COLLECT(
 	a_sammy.datas,
 	strip=False,
 	upx=True,
-	upx_exclude=["balcon.exe", "sam.exe"],
+	upx_exclude=["balcon.exe", "sam.exe", "ZDSRAPI.dll", "ZDSRAPI_X64.dll"],
 	name='STAR',
 )
