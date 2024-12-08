@@ -216,8 +216,8 @@ class star_client(wx.Frame):
 		self.main_panel = wx.Panel(self)
 		self.connecting_panel = wx.Panel(self)
 		self.connecting_label = wx.StaticText(self.connecting_panel, -1, "Connecting..." if "host" in config else "Host not configured.")
-		connecting_options_btn = wx.Button(self.connecting_panel, label = "&Options")
-		AsyncBind(wx.EVT_BUTTON, self.on_options, connecting_options_btn)
+		AsyncBind(wx.EVT_BUTTON, self.on_options, wx.Button(self.connecting_panel, label = "&Options"))
+		wx.Button(self.connecting_panel, label = "&Exit").Bind(wx.EVT_BUTTON, self.on_exit_btn)
 		sizer = wx.BoxSizer()
 		voices_label = wx.StaticText(self.main_panel, -1, "&Voices")
 		self.voices_list = voices_list(self.main_panel, style = wx.LC_REPORT | wx.LC_VIRTUAL | wx.LC_SINGLE_SEL)
@@ -386,9 +386,12 @@ class star_client(wx.Frame):
 		playsound("audio/complete.ogg" if not canceled else "audio/cancel.ogg")
 	async def on_options(self, evt = None):
 		"""Shows the options dialog and handles the saving of settings, either called as an event handler of the options button or else manually."""
+		canceled = False
 		while True:
 			r = await AsyncShowDialogModal(self.configuration) if evt else self.configuration.ShowModal()
-			if r != wx.ID_OK: return False
+			if r != wx.ID_OK:
+				canceled = True
+				break
 			if not await self.configuration.validate(None if evt else self): continue
 			old_host = config.get("host", "")
 			config["host"] = self.configuration.host.Value
@@ -404,7 +407,7 @@ class star_client(wx.Frame):
 			break
 		if self.initial_connection: self.main_panel.SetFocus()
 		else: self.connecting_panel.SetFocus()
-		return True
+		return not canceled
 	def on_exit_btn(self, evt): self.Close()
 	def on_stop_speaking(self, evt):
 		"""Called when the user presses alt+backspace, stops any currently playing speech."""
