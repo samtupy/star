@@ -1,11 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a_user = Analysis(
 	['user\\STAR.py'],
 	pathex=[],
 	binaries=[],
-	datas=[('user/audio', 'audio')],
+	datas=[('user/audio', 'audio'), ("user/readme.html", ".")],
 	hiddenimports=['_cffi_backend'],
 	hookspath=[],
 	hooksconfig={},

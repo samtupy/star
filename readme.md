@@ -18,16 +18,19 @@ The task of these components is to translate text to speech depending on the voi
 This component is what ties everything together. A coagulator is run, and then speech providers connect to it and send a list of voices it can synthesize. The coagulator will take note of voice names to provider clients. When a user client connects to the coagulator, it can therefor send a long speech script to the coagulator which is then parsed, whereupon requests per voice are sent on to the various speech providers that can synthesize each voices. The coagulator then acts as a relay, sending the audio data from each provider back to the user client that initially asked for it.
 
 ## Running from Source
+Currently the client works with python 3.12 windows 64 bit, however it should work on other platforms soon once a few minor dependancy issues are resolved.
+
 Pretty much this entire project is written in python sans a couple of providers such as the one for the NVGT fallback RSynth voice. The recommended first-time instructions are as follows:
 1. After opening a terminal window up to this repository's directory, create a python virtual environment to make an isolated workspace for all modules this project uses: `python -m venv venv`
 2. Activate the virtual environment you just created: on windows `venv\scripts\activate`, on MacOS `source venv/bin/activate`, or on Linux `venv/bin/activate`
 3. Install requirements: `pip install -r requirements.txt`
 4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory.
+
 From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do.
 
 If you want to create a complete local stack in one shell window, at least on windows you can use pythonw instead of python to run the coagulator and the provider in windows mode which will not block your terminal.
 
-If you wish to build the binaries, you can run pyinstaller STAR.spec from the repository's root directory.
+If you wish to build the binaries, you can run pyinstaller STAR.spec from the repository's root directory after generating the readme.html file by running python user/html_readme.py.
 
 You only need to set up a virtual environment the first time you clone the repository, after which you only need to activate it every time you open a terminal window up to the root of the repository.
 

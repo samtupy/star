@@ -1,4 +1,3 @@
-import accessible_output2.outputs.zdsr
 import accessible_output2.outputs.auto
 import asyncio
 import atexit

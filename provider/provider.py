@@ -53,7 +53,7 @@ class star_provider_configurator(wx.Dialog):
 		self.provider = provider
 		self.CreateButtonSizer(wx.OK | wx.CANCEL)
 		wx.StaticText(self, -1, "&Hosts")
-		self.hosts_list = wx.ListCtrl(self, style = wx.LC_SINGLE_SEL | wx.LC_LIST)
+		self.hosts_list = wx.ListCtrl(self, style = wx.LC_SINGLE_SEL | wx.LC_REPORT)
 		self.hosts_list.AppendColumn("Host")
 		for h in provider.hosts: self.hosts_list.Append([h])
 		delete_host_id = wx.NewIdRef()

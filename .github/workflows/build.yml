@@ -1,0 +1,25 @@
+name: build
+on:
+  workflow_dispatch:
+jobs:
+  windows_build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: build
+      run: |
+        pip3 install -r requirements.txt
+        python3 user/html_readme.py
+        pyinstaller --noconfirm STAR.spec
+        cd dist/STAR
+        7z a -y STAR_win64.zip *
+        mv STAR_win64.zip ../..
+        cd ../..
+    - uses: actions/upload-artifact@v4
+      with:
+        name: STAR_win64
+        path: STAR_win64.zip
+
