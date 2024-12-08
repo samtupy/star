@@ -13,6 +13,10 @@ jobs:
       run: |
         pip3 install -r requirements.txt
         python3 user/html_readme.py
+        cd provider
+        curl -s -O https://samtupy.com/star_ci/balcon.exe
+        curl -s -O https://samtupy.com/star_ci/sam.exe
+        cd ..
         pyinstaller --noconfirm STAR.spec
         cd dist/STAR
         7z a -y STAR_win64.zip *
