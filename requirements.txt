@@ -2,6 +2,7 @@ accessible_output2
 argparse
 configobj
 git+https://github.com/accessibleapps/platform_utils
+mistune
 pydub
 pyinstaller
 websockets

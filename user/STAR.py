@@ -272,6 +272,7 @@ class star_client(wx.Frame):
 		self.speech_cache = {}
 		self.current_speech = None
 		self.initial_connection = False
+		self.websocket = None
 		self.script_continuous_preview = False
 		self.render_total = 0
 		self.Show()
@@ -402,7 +403,7 @@ class star_client(wx.Frame):
 			old_device = config.get("output_device", None)
 			config["output_device"] = self.configuration.output_device
 			if old_device != config["output_device"]: set_playsound_device(config["output_device"])
-			if old_host != config["host"] and self.websocket: self.reconnect()
+			if old_host != config["host"] and evt: self.reconnect()
 			config.write()
 			break
 		if self.initial_connection: self.main_panel.SetFocus()
