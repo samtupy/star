@@ -25,11 +25,14 @@ def is_valid_ws_uri(uri):
 	if not uri.startswith("ws://") and not uri.startswith("wss://"): return "must start with a valid scheme (ws or wss)"
 	return True
 
-def parse_textline(textline):
-	"""This utility function splits the provided line of script (Mike<r=2>: Hi there) into a tuple of voicename, text."""
+def parse_textline(textline, aliases = {}):
+	"""This utility function splits the provided line of script (Mike<r=2>: Hi there) into a tuple of voicename, params, text. Aliases is a dictionary of alias: full_voicename, and the returned voicename will be run through this replacement dictionary."""
 	text = textline.partition(":")
-	voicename = text[0].partition("<")[0]
-	return (voicename, text[2].strip())
+	voicename = text[0].partition("<")
+	params = "<" + voicename[2] if voicename[2] else ""
+	voicename = voicename[0]
+	if voicename.lower() in aliases: voicename = aliases[voicename.lower()]
+	return (voicename, params, text[2].strip())
 
 def slugify(text, space_replacement = "", char_passthroughs = [" ", "_", "-", ",", ".", "!"]):
 	"""Utility to convert a string into a valid filename."""
@@ -88,6 +91,7 @@ class speech_request:
 	"""Container class which stores various bits of information we wish to remember about an outgoing speech request."""
 	next_request_id = 1
 	def __init__(self, textline, render_filename = None):
+		self.timestamp = time.time()
 		self.textline = textline
 		self.render_filename = render_filename
 		self.request_id = str(speech_request.next_request_id)
@@ -100,9 +104,12 @@ render_filename_tokens = [
 	*[(f"counter{'0' * (i + 1)}1", f"A counter in the format {', '.join([str(x + 1).zfill(i + 2) for x in range(3)])}...", lambda render, i = i: str(render.counter).zfill(i + 2)) for i in range(3)],
 	*[(f"line{'0' * i}0", f"The item's 0-based line number in the format {', '.join([str(x).zfill(i + 1) for x in range(3)])}...", lambda render, i = i: str(render.line -1).zfill(i + 1)) for i in range(4)],
 	*[(f"line{'0' * i}1", f"The item's line number in the format {', '.join([str(x + 1).zfill(i + 1) for x in range(3)])}...", lambda render, i = i: str(render.line).zfill(i + 1)) for i in range(4)],
-	("voice", "The item's voice name as typed", lambda render: render.voice),
-	("voice_lower", "The item's lowercase voice name as typed", lambda render: render.voice.lower()),
-	("voice_slug", "The item's lowercased voice name with extraneous characters removed and spaces replaced with underscores", lambda render: slugify(render.voice.lower(), space_replacement = "_", char_passthroughs = ["_"])),
+	("voice", "The item's voice name as typed", lambda render: render.original_voice),
+	("voice_lower", "The item's lowercase voice name as typed", lambda render: render.original_voice.lower()),
+	("voice_slug", "The item's lowercased voice name with extraneous characters removed and spaces replaced with underscores", lambda render: slugify(render.original_voice.lower(), space_replacement = "_", char_passthroughs = ["_"])),
+	("voice_aliased", "The item's voice name after alias replacement", lambda render: render.voice),
+	("voice_lower_aliased", "The item's lowercase voice name after alias replacement", lambda render: render.voice.lower()),
+	("voice_slug_aliased", "The item's lowercased voice name after alias replacement with extraneous characters removed and spaces replaced with underscores", lambda render: slugify(render.voice.lower(), space_replacement = "_", char_passthroughs = ["_"])),
 	("text", "The item's text altered minimally to fit in a filename", lambda render: slugify(render.text[:200])),
 	("text1", "The first word of the item's text", lambda render: slugify(" ".join(render.text[:200].split(" ")[:1]))),
 	*[(f"text{i}", f"The item's first {i} words of text", lambda render, i = i: slugify(" ".join(render.text[:200].split(" ")[:i]))) for i in [2, 3, 5, 10, 15, 20]]
@@ -113,13 +120,14 @@ def render_filename_tokens_help():
 	return "\n".join([
 		"It is possible to customize the output filenames produced by STAR with special tokens that are substituted with dynamic data.",
 		"In the render filename template field, you can specify any of the following tokens by typing or pasting one between braces, for example {voice} or {text5}:"
-	] + [f"\t{r[0]}: {r[1]}" for r in render_filename_tokens])
+	] + [f"\t{r[0]}: {r[1]}" for r in render_filename_tokens] + [""])
 
 class render_filename:
 	"""A small container class to store various properties about an item that is being rendered for the purposes of generating a valid custom filename, done this way so that render token lambdas have easy access to the data they need. Construct this object with valid arguments then access the filename property."""
-	def __init__(self, counter, line, voice, text, template = None):
+	def __init__(self, counter, line, original_voice, voice, text, template = None):
 		self.counter = counter
 		self.line = line
+		self.original_voice = original_voice
 		self.voice = voice
 		self.text = text
 		self.template = config.get("render_filename_template", "{counter01}") if not template else template
@@ -152,6 +160,7 @@ class star_client_configuration(wx.Dialog):
 		wx.Dialog.__init__(self, parent, title = "STAR Client Configuration")
 		host_label = wx.StaticText(self, -1, "&Host to connect to")
 		self.host = wx.TextCtrl(self, value = config.get("host", ""))
+		self.host.SetHint("for example ws://username:password@server.com:7774")
 		render_path_label = wx.StaticText(self, -1, "Default &Render location")
 		self.render_path = wx.DirPickerCtrl(self, path = config.get("render_path", os.path.join(os.getcwd(), "output")), message = "Select a default directory to render output into")
 		render_path_label.Reparent(self.render_path)
@@ -159,6 +168,8 @@ class star_client_configuration(wx.Dialog):
 		self.render_filename_template = wx.TextCtrl(self, value = config.get("render_filename_template", "{counter01}"))
 		wx.StaticText(self, -1, "Render Filename template tokens &information")
 		wx.TextCtrl(self, style = wx.TE_MULTILINE | wx.HSCROLL | wx.TE_READONLY, value = render_filename_tokens_help())
+		wx.StaticText(self, -1, "Amount of sil&ence (in milliseconds) to insert between consolidated speech clips")
+		self.render_consolidated_silence = wx.SpinCtrl(self, value = config.get("render_consolidated_silence", "200"), max = 5000)
 		wx.StaticText(self, -1, "Voice &preview text")
 		self.voice_preview_text = wx.TextCtrl(self, value = config.get("voice_preview_text", "Hello there, my name is {voice}."))
 		wx.StaticText(self, -1, "&Output Device")
@@ -183,8 +194,11 @@ class star_client_configuration(wx.Dialog):
 		self.host.SetFocus()
 	def on_clear_cache(self, evt):
 		self.Parent.speech_cache = {}
+		self.Parent.aliases_modified = True
+		self.Parent.speech_requests_text = {}
 		self.clear_cache_btn.Enabled = False
 	async def validate_fail(self, parent, message, control):
+		"""This not only makes the validate function below prettier, but it also serves as a minor hack that allows this dialog to run both before and after the WxAsync main loop has started."""
 		dlg = wx.MessageDialog(self, message, "error")
 		if parent == self: await AsyncShowDialogModal(dlg)
 		else: dlg.ShowModal()
@@ -222,8 +236,14 @@ class star_client(wx.Frame):
 		self.voices_list = voices_list(self.main_panel, style = wx.LC_REPORT | wx.LC_VIRTUAL | wx.LC_SINGLE_SEL)
 		AsyncBind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_preview_voice, self.voices_list)
 		copy_voicename_id = wx.NewIdRef()
+		self.voice_find_id = wx.NewIdRef()
+		self.voice_find_next_id = wx.NewIdRef()
+		self.voice_find_prev_id = wx.NewIdRef()
 		self.Bind(wx.EVT_MENU, self.on_copy_voicename, id = copy_voicename_id)
-		self.voices_list.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('c'), copy_voicename_id)]))
+		AsyncBind(wx.EVT_MENU, self.on_find_voice, self, id = self.voice_find_id)
+		AsyncBind(wx.EVT_MENU, self.on_find_voice, self, id = self.voice_find_next_id)
+		AsyncBind(wx.EVT_MENU, self.on_find_voice, self, id = self.voice_find_prev_id)
+		self.voices_list.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('c'), copy_voicename_id), (wx.ACCEL_CTRL, ord("f"), self.voice_find_id), (wx.ACCEL_NORMAL, wx.WXK_F3, self.voice_find_next_id), (wx.ACCEL_SHIFT, wx.WXK_F3, self.voice_find_prev_id)]))
 		quickspeak_label = wx.StaticText(self.main_panel, -1, "&Quickspeak")
 		self.quickspeak = wx.TextCtrl(self.main_panel, style = wx.TE_PROCESS_ENTER | wx.TE_MULTILINE | wx.HSCROLL)
 		AsyncBind(wx.EVT_TEXT_ENTER, self.on_quickspeak, self.quickspeak)
@@ -238,9 +258,10 @@ class star_client(wx.Frame):
 		AsyncBind(wx.EVT_MENU, self.on_preview_script, self, id = self.preview_cur_id)
 		AsyncBind(wx.EVT_MENU, self.on_preview_script, self, id = self.preview_continuous_id)
 		self.script.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL | wx.ACCEL_ALT, ord(' '), self.preview_cur_id), (wx.ACCEL_CTRL | wx.ACCEL_ALT, wx.WXK_UP, self.preview_prev_id), (wx.ACCEL_CTRL | wx.ACCEL_ALT, wx.WXK_DOWN, self.preview_next_id), (wx.ACCEL_CTRL | wx.ACCEL_ALT, wx.WXK_RETURN, self.preview_continuous_id)]))
+		self.script.Bind(wx.EVT_TEXT, self.on_script_change)
 		render_title_label = wx.StaticText(self.main_panel, -1, "Output Sub&directory or consolidated filename")
 		self.render_title = wx.TextCtrl(self.main_panel)
-		self.render_btn = wx.Button(self.main_panel, label = "&Render to wav")
+		self.render_btn = wx.Button(self.main_panel, label = "&Render to Disc")
 		AsyncBind(wx.EVT_BUTTON, self.on_render, self.render_btn)
 		options_btn = wx.Button(self.main_panel, label = "&Options")
 		AsyncBind(wx.EVT_BUTTON, self.on_options, options_btn)
@@ -258,17 +279,21 @@ class star_client(wx.Frame):
 		sizer.Add(options_btn, 0, wx.ALL, 5)
 		sizer.Add(exit_btn, 0, wx.ALL, 5)
 		self.main_panel.SetSizer(sizer)
-		stop_speaking_id = wx.NewIdRef()
-		self.main_panel.Bind(wx.EVT_MENU, self.on_stop_speaking, id = stop_speaking_id)
-		self.main_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, stop_speaking_id)]))
+		toggle_speaking_id = wx.NewIdRef()
+		self.main_panel.Bind(wx.EVT_MENU, self.on_toggle_speaking, id = toggle_speaking_id)
+		self.main_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, toggle_speaking_id)]))
 		self.Connect(-1, -1, EVT_DONE_SPEAKING, self.on_auto_preview_next_script_line)
 		self.main_panel.Hide()
 		self.connecting_panel.Show()
 		self.connecting_label.SetFocus()
 		self.voices_list.InsertColumn(0, "voice name")
 		self.voices = []
+		self.voice_find_text = ""
 		self.speech_requests = {}
+		self.speech_requests_text = {}
 		self.speech_cache = {}
+		self.aliases = {}
+		self.aliases_modified = False
 		self.current_speech = None
 		self.initial_connection = False
 		self.websocket = None
@@ -286,6 +311,29 @@ class star_client(wx.Frame):
 			wx.TheClipboard.SetData(wx.TextDataObject(self.voices[voice]))
 			wx.TheClipboard.Close()
 		speech.speak("copied")
+	async def on_find_voice(self, evt):
+		"""This handles ctrl+f, f3, and shift+f3 in the voices list."""
+		if not self.voices:
+			speech.speak("no voices to search")
+			return
+		dir = 1 if evt.Id != self.voice_find_prev_id else -1
+		if evt.Id == self.voice_find_id or not self.voice_find_text:
+			dlg = wx.TextEntryDialog(self, "search for", "Find", self.voice_find_text)
+			r = await AsyncShowDialogModal(dlg)
+			self.voices_list.SetFocus()
+			if r == wx.ID_CANCEL: return
+			self.voice_find_text = dlg.Value
+		initial_idx = self.voices_list.FocusedItem
+		idx = initial_idx + dir
+		while idx != initial_idx:
+			if dir < 0 and idx < 0: idx = len(self.voices) -1
+			elif dir > 0 and idx >= len(self.voices): idx = 0
+			if self.voice_find_text.lower() in self.voices[idx].lower(): break
+			else: idx += dir
+		if idx != initial_idx:
+			self.voices_list.Select(idx)
+			self.voices_list.Focus(idx);
+		else: speech.speak("not found")
 	async def on_preview_voice(self, evt):
 		"""This is called when a voice in the voices list is activated, speaks a small sample of the voice."""
 		self.script_continuous_preview = False
@@ -307,17 +355,25 @@ class star_client(wx.Frame):
 		b, col, line = self.script.PositionToXY(pos)
 		if evt.Id == self.preview_prev_id: line -= 1
 		elif evt.Id == self.preview_next_id: line += 1
+		if line < 0: line = 0
 		line_len = self.script.GetLineLength(line)
 		if line_len < 0: return
 		new_pos = self.script.XYToPosition(0, line)
 		if pos != new_pos: self.script.SetInsertionPoint(new_pos)
 		self.script_continuous_preview = evt.Id == self.preview_continuous_id
 		line_text = self.script.GetLineText(line).strip()
-		if not line_text or line_text.startswith(";"): return
-		await self.audiospeak(line_text)
+		if not line_text or line_text.startswith(";"):
+			playsound("audio/metaline.ogg")
+			return
+		self.script_find_aliases()
+		voice, params, line_text = parse_textline(line_text, self.aliases)
+		if not voice or not line_text:
+			playsound("audio/metaline.ogg", pitch = 0.8)
+			return
+		await self.audiospeak(f"{voice}{params}: {line_text}")
 	def on_auto_preview_next_script_line(self, evt):
-		"""This method gets called after a speech event has finished if the continuous script preview is active."""
-		text = ""
+		"""This method gets called after a speech event has finished if the continuous script preview is active, it is responsible for scrolling to the next text line and previewing it."""
+		voice = params = text = ""
 		b, col, line = self.script.PositionToXY(self.script.GetInsertionPoint())
 		while not text:
 			line += 1
@@ -330,16 +386,21 @@ class star_client(wx.Frame):
 			if not text or text.startswith(";"):
 				text = ""
 				continue
-		StartCoroutine(self.audiospeak(text), self)
+			voice, params, text = parse_textline(text, self.aliases)
+			if not voice or not text: continue
+		StartCoroutine(self.audiospeak(f"{voice}{params}: {text}"), self)
+	def on_script_change(self, evt):
+		"""Called when the contents of the script field changes, indicates that we should rescan the field for aliases and metadata at next render or preview."""
+		self.aliases_modified = True
 	async def on_render(self, evt):
-		"""The bulk of the rendering facility (called when Render to Wav is pressed), this method prepares renderable lines from the script and calls self.audiospeak for each event."""
+		"""The bulk of the rendering facility (called when Render to Disc is pressed), this method prepares renderable lines from the script and calls self.audiospeak for each event."""
 		if self.render_total:
 			await self.websocket.send(json.dumps({"user": USER_REVISION, "command": "abort"}))
 			self.speech_requests = {}
+			self.speech_requests_text = {}
 			self.on_render_complete(True)
 			return
 		if getattr(self, "last_render", 0) > time.time() -1: return
-		self.last_render = time.time()
 		script = self.script.Value.strip()
 		if not script: return await AsyncShowDialogModal(wx.MessageDialog(self, "You must provide a script for rendering", "error"))
 		lines = script.split("\n")
@@ -349,12 +410,17 @@ class star_client(wx.Frame):
 		for i in range(len(lines)):
 			l = lines[i].strip()
 			if not l or l.startswith(";") or not ": " in l: continue
-			voice, text = parse_textline(l)
+			orig_voice = parse_textline(l)[0]
+			voice, params, text = parse_textline(l, self.aliases)
 			if not voice or not text: continue
-			render_fn = render_filename(self.render_total, i, voice, text).filename
+			render_fn = render_filename(self.render_total, i, orig_voice, voice, text).filename
 			self.render_total += 1
-			renderable_lines.append((render_fn, l))
-		if not renderable_lines: return AsyncShowDialogModal(wx.MessageDialog(self, "no renderable data", "error"))
+			renderable_lines.append((render_fn, f"{voice}{params}: {text}"))
+		if not renderable_lines:
+			self.render_total = 0
+			return await AsyncShowDialogModal(wx.MessageDialog(self, "no renderable data", "error"))
+		self.last_render = time.time()
+		self.script_find_aliases()
 		playsound("audio/begin.ogg")
 		self.render_path = self.render_output_path = os.path.join(config.get("render_path", os.path.join(os.getcwd(), "output")), self.render_title.Value)
 		if os.path.splitext(self.render_title.Value)[1] in [".wav", ".mp3"]:
@@ -375,6 +441,7 @@ class star_client(wx.Frame):
 				items = [i for i in glob.glob(os.path.join(self.render_output_path, "*.wav"))]
 				combined = AudioSegment(data = b"", sample_width = 2, frame_rate = 44100, channels = 1)
 				for i in items:
+					if len(combined) > 0: combined += AudioSegment.silent(config.as_int("render_consolidated_silence") if "render_consolidated_silence" in config else 200)
 					combined += AudioSegment.from_file(i)
 				try: os.remove(self.render_path)
 				except: pass
@@ -382,7 +449,7 @@ class star_client(wx.Frame):
 				if not os.path.isdir(output_basedir): os.makedirs(output_basedir)
 				combined.export(self.render_path, format = os.path.splitext(title)[1].lower()[1:], bitrate = "192k")
 		if hasattr(self, "render_output_path_tmp"): del(self.render_output_path_tmp)
-		self.render_btn.Label = "&Render to Wav"
+		self.render_btn.Label = "&Render to Disc"
 		playsound("audio/complete.ogg" if not canceled else "audio/cancel.ogg")
 	async def on_options(self, evt = None):
 		"""Shows the options dialog and handles the saving of settings, either called as an event handler of the options button or else manually."""
@@ -397,6 +464,7 @@ class star_client(wx.Frame):
 			config["host"] = self.configuration.host.Value
 			config["render_path"] = self.configuration.render_path.Path
 			config["render_filename_template"] = self.configuration.render_filename_template.Value
+			config["render_consolidated_silence"] = self.configuration.render_consolidated_silence.Value
 			config["voice_preview_text"] = self.configuration.voice_preview_text.Value
 			config["clear_output_on_render"] = self.configuration.clear_output_on_render.Value
 			old_device = config.get("output_device", None)
@@ -409,17 +477,16 @@ class star_client(wx.Frame):
 		else: self.connecting_panel.SetFocus()
 		return not canceled
 	def on_exit_btn(self, evt): self.Close()
-	def on_stop_speaking(self, evt):
-		"""Called when the user presses alt+backspace, stops any currently playing speech."""
+	def on_toggle_speaking(self, evt):
+		"""Called when the user presses alt+backspace, pauses or resumes any currently playing speech."""
 		if not self.current_speech: return
-		self.current_speech.close()
-		self.current_speech = None
-		self.script_continuous_preview = False
+		self.current_speech.pause() if self.current_speech.playing else self.current_speech.resume()
 	def reconnect(self):
 		"""Reestablishes the remote websocket connection, typically called if the host address is updated in the options dialog."""
 		if self.connection_task: self.connection_task.cancel()
 		self.initial_connection = False
 		self.speech_requests = {}
+		self.speech_requests_text = {}
 		self.voices = {}
 		self.voices_list.update(self)
 		self.connecting_label.Label = "Connecting..."
@@ -500,6 +567,7 @@ class star_client(wx.Frame):
 		elif "warning" in message:
 			playsound("audio/warning.ogg")
 			speech.speak(message["warning"])
+			self.speech_requests_text = {}
 			if hasattr(self, "render_items"): self.render_items += 1
 	def on_remote_audio(self, id, audio):
 		"""Handles a remote audio payload, speaking it or saving it as a rendered item. Usually called from handle_remote_binary"""
@@ -511,17 +579,40 @@ class star_client(wx.Frame):
 			if self.current_speech: self.current_speech.close()
 			self.current_speech = playsound(audio, finish_func = self.on_done_speaking)
 		else: self.audiosave(r.render_filename, audio)
-	def on_done_speaking(self, unused):
+	def on_done_speaking(self, data):
+		"""This gets called by the playsound class above when any currently playing speech has reached it's end. Importantly, it gets called on a thread controled by miniaudio so we need to post back to the main UI thread."""
 		self.current_speech = None
 		if self.script_continuous_preview: wx.PostEvent(self, done_speaking_event())
+	def script_find_aliases(self):
+		"""This searches through the script for metadata lines that begin with vertical bar (|) characters and attempts to parse voice aliases (|sam = Microsoft Sam) from such lines. It is called upon render or preview but is a no-op unless the script field has been modified since this method's last call."""
+		if not self.aliases_modified: return
+		self.aliases_modified = False
+		self.aliases = {}
+		line = -1
+		while True:
+			line += 1
+			line_len = self.script.GetLineLength(line)
+			if line_len < 0: return
+			text = self.script.GetLineText(line).strip()
+			if not text.startswith("|"): continue
+			voice, sep, replacement = text[1:].partition("=")
+			voice = voice.strip().lower()
+			replacement = replacement.strip()
+			if not voice or not replacement: continue
+			self.aliases[voice] = replacement
 	async def audiospeak(self, textline, render_filename = None):
 		"""One of the main public interfaces in this application: Receives a parsable line of text "Sam: hello", and either plays the resulting speech synthesis or renders it if a sequence number is given."""
 		if textline in self.speech_cache:
 			if not render_filename:
 				if self.current_speech: self.current_speech.close()
 				self.current_speech = playsound(self.speech_cache[textline], finish_func = self.on_done_speaking)
+				if textline in self.speech_requests_text: del(self.speech_requests_text[textline])
 			else: self.audiosave(render_filename, self.speech_cache[textline])
 		else:
+			if not render_filename and textline in self.speech_requests_text and time.time() -self.speech_requests_text[textline] < 10:
+				speech.speak("request in progress")
+				return
+			else: self.speech_requests_text[textline] = time.time()
 			r = speech_request(textline, render_filename)
 			self.speech_requests[r.request_id] = r
 			await self.websocket.send(json.dumps({"user": USER_REVISION, "request": textline, "id": r.request_id}))
