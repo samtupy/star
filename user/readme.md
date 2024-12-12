@@ -57,7 +57,7 @@ A typical line looks like:
 
 First a voice name is provided, then a colon and a space to denote the end of the voice name, and then the text that should be synthesized on that line. Only a partial voice name is required, for example the voice name "david" would resolve to "Microsoft David Desktop English United States."
 
-Whitespace at the btinning of all lines is trimmed during parsing, meaning that indenting parts of your script is possible should you desire.
+Whitespace at the beginning of all lines is trimmed during parsing, meaning that indenting parts of your script is possible should you desire.
 
 It is also possible to provide parameters to the voice, for example to make Microsoft sam speak slower one might type:
 
