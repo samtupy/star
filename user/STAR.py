@@ -61,6 +61,7 @@ class playsound:
 	def __init__(self, data, pitch = 1.0, finish_func = None, finish_func_data = None):
 		self.finish_func = finish_func
 		self.finish_func_data = finish_func_data
+		if not data: return
 		self.device = miniaudio.PlaybackDevice(buffersize_msec = 5, sample_rate = int(44100 * pitch), device_id = playsound_device)
 		atexit.register(self.device.close)
 		if type(data) == bytes: self.stream = miniaudio.stream_with_callbacks(miniaudio.stream_memory(data, sample_rate = 44100), end_callback = self.on_stream_end)
@@ -82,7 +83,7 @@ class playsound:
 		self.device.start(self.stream)
 		return True
 	def close(self):
-		if not self.device: return
+		if not getattr(self, "device", None): return
 		atexit.unregister(self.device.close)
 		self.device.close()
 		self.device = None
@@ -204,6 +205,7 @@ class star_client_configuration(wx.Dialog):
 		else: dlg.ShowModal()
 		control.SetFocus()
 	async def validate(self, parent = None):
+		"""Insures that values entered into the options dialog are sane, showing error dialogs if not and returning a boolean value in either case (True for validated settings)."""
 		if not parent: parent = self
 		self.output_device = self.output_devices.GetItemText(self.output_devices.FocusedItem)
 		render_fn = render_filename(1, 10, "Voice", "Text string", self.render_filename_template.Value).filename
@@ -265,7 +267,7 @@ class star_client(wx.Frame):
 		AsyncBind(wx.EVT_BUTTON, self.on_render, self.render_btn)
 		options_btn = wx.Button(self.main_panel, label = "&Options")
 		AsyncBind(wx.EVT_BUTTON, self.on_options, options_btn)
-		exit_btn = wx.Button(self.main_panel, label = "E&xit")
+		exit_btn = wx.Button(self.main_panel, id = wx.NewIdRef(), label = "E&xit")
 		exit_btn.Bind(wx.EVT_BUTTON, self.on_exit_btn)
 		sizer.Add(voices_label, 0, wx.ALL, 5)
 		sizer.Add(self.voices_list, 0, wx.ALL, 5)
@@ -281,7 +283,7 @@ class star_client(wx.Frame):
 		self.main_panel.SetSizer(sizer)
 		toggle_speaking_id = wx.NewIdRef()
 		self.main_panel.Bind(wx.EVT_MENU, self.on_toggle_speaking, id = toggle_speaking_id)
-		self.main_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, toggle_speaking_id)]))
+		self.main_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, toggle_speaking_id), (wx.ACCEL_NORMAL, wx.WXK_ESCAPE, exit_btn.Id)]))
 		self.Connect(-1, -1, EVT_DONE_SPEAKING, self.on_auto_preview_next_script_line)
 		self.main_panel.Hide()
 		self.connecting_panel.Show()
@@ -325,10 +327,10 @@ class star_client(wx.Frame):
 			self.voice_find_text = dlg.Value
 		initial_idx = self.voices_list.FocusedItem
 		idx = initial_idx + dir
-		while idx != initial_idx:
+		while True:
 			if dir < 0 and idx < 0: idx = len(self.voices) -1
 			elif dir > 0 and idx >= len(self.voices): idx = 0
-			if self.voice_find_text.lower() in self.voices[idx].lower(): break
+			if idx == initial_idx or self.voice_find_text.lower() in self.voices[idx].lower(): break
 			else: idx += dir
 		if idx != initial_idx:
 			self.voices_list.Select(idx)
@@ -348,7 +350,7 @@ class star_client(wx.Frame):
 			speech.speak("nothing to speak")
 			return
 		self.script_continuous_preview = False
-		await self.audiospeak(f"{self.voices[voice]}: {self.quickspeak.Value.replace("\n", "  ")}")
+		await self.audiospeak(f"{self.voices[voice]}: {self.quickspeak.Value.replace('\n', '  ')}")
 	async def on_preview_script(self, evt):
 		"""The script previewing facility, handles ctrl+alt+(space, up and down) calling self.audiospeak for each speech line detected."""
 		pos = self.script.GetInsertionPoint()
@@ -403,24 +405,34 @@ class star_client(wx.Frame):
 		if getattr(self, "last_render", 0) > time.time() -1: return
 		script = self.script.Value.strip()
 		if not script: return await AsyncShowDialogModal(wx.MessageDialog(self, "You must provide a script for rendering", "error"))
+		self.script_find_aliases()
 		lines = script.split("\n")
 		renderable_lines = []
+		selected_renderable_lines = []
+		selection_block_depth = 0
 		self.render_total = 1
 		self.rendered_items = 0
 		for i in range(len(lines)):
 			l = lines[i].strip()
+			if l == "<" or l == ">":
+				selection_block_depth += (1 if l == "<" else -1)
+				continue
 			if not l or l.startswith(";") or not ": " in l: continue
 			orig_voice = parse_textline(l)[0]
 			voice, params, text = parse_textline(l, self.aliases)
 			if not voice or not text: continue
 			render_fn = render_filename(self.render_total, i, orig_voice, voice, text).filename
 			self.render_total += 1
-			renderable_lines.append((render_fn, f"{voice}{params}: {text}"))
+			rl = (render_fn, f"{voice}{params}: {text}")
+			renderable_lines.append(rl)
+			if selection_block_depth > 0: selected_renderable_lines.append(rl)
+		if selection_block_depth:
+			self.render_total = 0
+			return await AsyncShowDialogModal(wx.MessageDialog(self, "unmatched render block selection tokens <> level " + str(selection_block_depth), "error"))
 		if not renderable_lines:
 			self.render_total = 0
 			return await AsyncShowDialogModal(wx.MessageDialog(self, "no renderable data", "error"))
 		self.last_render = time.time()
-		self.script_find_aliases()
 		playsound("audio/begin.ogg")
 		self.render_path = self.render_output_path = os.path.join(config.get("render_path", os.path.join(os.getcwd(), "output")), self.render_title.Value)
 		if os.path.splitext(self.render_title.Value)[1] in [".wav", ".mp3"]:
@@ -429,6 +441,7 @@ class star_client(wx.Frame):
 		if (not "clear_output_on_render" in config or config.as_bool("clear_output_on_render")) and self.render_title.Value:
 			[os.remove(i) for i in glob.glob(os.path.join(config.get("render_path", os.path.join(os.getcwd(), "output")), self.render_title.Value, "*.wav"))]
 		self.render_btn.Label = "Cancel"
+		if selected_renderable_lines: renderable_lines = selected_renderable_lines
 		self.render_total = len(renderable_lines)
 		for l in renderable_lines: await self.audiospeak(l[1], render_filename = l[0])
 	def on_render_complete(self, canceled = False):
@@ -520,11 +533,18 @@ class star_client(wx.Frame):
 				print("shutting down")
 				should_exit = True
 			except websockets.exceptions.InvalidURI as e:
-				print("warning,", e)
+				playsound("audio/error.ogg")
+				self.connecting_label.Label = str(e)
+				self.connecting_label.SetFocus()
+				return
+			except websockets.exceptions.InvalidStatus as e:
+				playsound("audio/error.ogg")
+				self.connecting_label.Label = f"{e} {e.response.reason_phrase};	 {e.response.body.decode().strip()}"
+				self.connecting_label.SetFocus()
 				return
 			except Exception as e:
 				traceback.print_exc()
-				print(f"reconnecting to {host}... {e}")
+				self.connecting_label.Label = f"Reconnecting... {e}"
 				await asyncio.sleep(3)
 	async def on_connect(self, websocket):
 		"""This function is fired on every successful websocket connection and is responsible for any UI modifications, server hello, and post-connection-setup required."""

@@ -1,18 +1,22 @@
 # The original source code for this program is in coagulator_old.py. I wrote it using what turned out to be a noncompliant and incomplete web_socket_server framework, so I asked ChatGPT to rewrite it using the python websockets framework and then modified the result to make it work. In the end, Chat GPT is responsible for the asyncio stuff mostly.
 
+import asyncio
+import argparse
+import configobj
 import json
 import random
 import re
+import sys
 import time
-import asyncio
 import traceback
 import websockets
 import websockets.asyncio.server
 
 def g(): pass #globals
-g.provider_rev = 2
-g.user_rev = 2
+g.provider_rev = 3
+g.user_rev = 3
 g.next_client_id = 1
+g.config = configobj.ConfigObj("coagulator.ini")
 
 def parse_speech_meta(meta):
 	"""Takes speech metadata such as "Sam" or "Sam<r=4 p=-2>" and returns a dictionary of parsed properties such as voice, rate, and pitch."""
@@ -159,11 +163,14 @@ async def client_handler(ws):
 		del(g.clients[client_id])
 		await on_client_disconnect(ws, client_id)
 
+def handle_args():
+	"""Uses argparse to process and apply command line arguments."""
+
 async def main():
 	g.speech_requests = {}
 	g.voices = {}
 	g.clients = {}
-	async with websockets.asyncio.server.serve(client_handler, "0.0.0.0", 7774, max_size = 1024 * 1024 * 5, max_queue = 4096):
+	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 5)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: "users" not in g.config or username in g.config["users"] and g.config["users"][username].get("password", "") == password)):
 		print("Coagulator up.")
 		await asyncio.get_running_loop().create_future()
 
