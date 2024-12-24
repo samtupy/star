@@ -26,7 +26,7 @@ Pretty much this entire project is written in python sans a couple of providers 
 3. Install requirements: `pip install -r requirements.txt`
 4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory.
 
-From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do.
+From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do. You'll likely want to configure the coagulator/provider first, and so everything accept the user client supports a --configure command line argument which brings up a configuration interface, and/or --config filename.ini to load configuration from a specified path (useful for things like unix daemons).
 
 If you want to create a complete local stack in one shell window, at least on windows you can use pythonw instead of python to run the coagulator and the provider in windows mode which will not block your terminal.
 

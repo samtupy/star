@@ -51,27 +51,32 @@ The main function of this program involves being able to provide sevral lines of
 
 To facilitate this, STAR parses the text in the script field based on a simple specification that allows the end user to denote what voice each line of text is spoken with, and what parameters such as rate and pitch should be applied to that line.
 
+### Basic line definition
 A typical line looks like:
 
 ```Microsoft Sam: Hello, everybody knows me!```
 
 First a voice name is provided, then a colon and a space to denote the end of the voice name, and then the text that should be synthesized on that line. Only a partial voice name is required, for example the voice name "david" would resolve to "Microsoft David Desktop English United States."
 
-Whitespace at the beginning of all lines is trimmed during parsing, meaning that indenting parts of your script is possible should you desire.
-
+### Voice parameters
 It is also possible to provide parameters to the voice, for example to make Microsoft sam speak slower one might type:
 
 ```Microsoft Sam<r=-5>: Aaaawch, that hurts!```
 
 The available parameters are r for rate and p for pitch, though the minimum and maximum values or even whether the parameters are supported is left up to each STAR provider/speech engine. Each parameter=value pair should be seperated by space if a line contains more than one of them, for example `<rp1 p=5>` to make a voice speak slightly faster and significantly higher in pitch.
 
+### Comments and whitespace
 If the first non-whitespace character in a line is a semicolon (;), STAR will treat the line as a comment and will not process it.
 
+Whitespace at the beginning of all lines is trimmed during parsing, meaning that indenting parts of your script is possible should you desire.
+
+### Selecting between multiple voice occurances
 A common issue involves selecting the appropriate/desired voice based on a similar list of possible voices. For example, one voice might be called "Paul" while another is called "Espeak Paul English US." In this case, you can put a numeric specifier before a voice name to select alternate occurances of that voice. Such a line might look like:
 
 ```2.david: Hi, I am the second david!```
 
-The last but not least feature supported in these scripts is voice aliases or character names. This allows you to refer to a voice by a shorthand identifier instead of by either a full voice name or a numeric identifier which might change based on what voices are connected. If the first non-whitespace character on a line begins with a verticle bar (|), the line is treated as extra metadata instead of as a speech line. The only currently supported metadata is the definition of a voice alias. For example, consider this script:
+### Voice aliases
+The next great feature supported in these scripts is voice aliases or character names. This allows you to refer to a voice by a shorthand identifier instead of by either a full voice name or a numeric identifier which might change based on what voices are connected. If the first non-whitespace character on a line begins with a verticle bar (|), the line is treated as extra metadata instead of as a speech line. The only currently supported metadata is the definition of a voice alias. For example, consider this script:
 
 ```;characters:
 	|john = Adult Male #8, American English TruVoice
@@ -85,7 +90,28 @@ The last but not least feature supported in these scripts is voice aliases or ch
 	John: Thanks Sam.
 ```
 
-The above example shows the usage of comments to denote the characters from the scenes, and shows how by defining the character alias rs5 for example, we can then avoid needing to type RoboSoft Five over and over again in the script which can be a huge speed boost. Any whitespace is trimmed from the aliases so that space between the equals sign is optional, and an alias defined anywhere in your script will effect the entire document E. you can safely place your aliases at the bottom of your script if you like.
+The above example shows the usage of comments to denote the characters from the scenes, and shows how by defining the character alias rs5 for example, we can then avoid needing to type RoboSoft Five over and over again in the script which can be a huge speed boost. Any whitespace is trimmed from the aliases so that space between the equals sign is optional, and an alias defined anywhere in your script will effect the entire document E. you can safely place your aliases at the bottom of your script if you like. Aliases can include default rate and pitch parameters, such as `|MadMike = Microsoft Mike<p=9 r=3>` for example. If a script line then contains any parameters, that line will override the defaults in the voice alias.
+
+### Selective rendering
+The final supported feature in the script format allows for selective rendering. Often, it might happen that you might want to simply tweak one or 2 lines, or continuously add new voice clips to your audio production as you are sound designing. While you could just paste only the part of your script in the field you wish to render, this would mess up any counters which would allow you to account for what order the voice clips should play in. Instead, you can wrap groups of lines in `< and >` characters to select only the lines contained within to render, like this.
+
+```;characters:
+	|john = Adult Male #8, American English TruVoice
+	|rs5 = RoboSoft Five
+	|sam=Microsoft Sam
+;scene
+	John: aaaaaa I'm being attacked by a robot!
+	rs5: Get ready, for you will die now!
+	Sam: I'll save you!
+	rs5: nooooooooooooooaaaaaooooo!
+	John: Thanks Sam.
+	<
+	Sam: You're welcome, but now as payment you must go publicly proclaim me to be the best tts voice that's ever existed!
+	John: Are you kidding? Dream on!
+	>
+```
+
+Here, we've selected only the 2 final lines in the script for rendering, but those lines will maintain the proper file counter. While this is also useful for editing existing lines, it may be somewhat less useful when trying to add lines in the middle of your script as doing so will invalidate the incrementing file/clip counter for any lines after the addition/deletion point. You can have as many blocks of selected lines as you wish. Another useful trick with this is that you can effectively disable render selection blocks without deleting them. Since any nesting levels of `< and >` characters are ignored, you can first wrap some lines you wish to render in selection blocks, which will cause only those lines to be rendered. Then however if you place one large selection block around your entire script, now in effect your entire script will be rendered again, with the ability to simply remove the selection tokens from the beginning and end of the document to reenable the previously configured render selection blocks.
 
 ## Change log
 ### Revision 3
