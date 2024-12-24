@@ -13,7 +13,6 @@ jobs:
       run: |
         pip3 install -r requirements.txt
         python3 user/html_readme.py
-        cp old/wxasync.py user
         cd provider
         curl -s -O https://samtupy.com/star_ci/balcon.exe
         curl -s -O https://samtupy.com/star_ci/sam.exe
