@@ -68,7 +68,7 @@ The available parameters are r for rate and p for pitch, though the minimum and 
 ### Comments and whitespace
 If the first non-whitespace character in a line is a semicolon (;), STAR will treat the line as a comment and will not process it.
 
-Whitespace at the btinning of all lines is trimmed during parsing, meaning that indenting parts of your script is possible should you desire.
+Whitespace at the beginning of all lines is trimmed during parsing, meaning that indenting parts of your script is possible should you desire.
 
 ### Selecting between multiple voice occurances
 A common issue involves selecting the appropriate/desired voice based on a similar list of possible voices. For example, one voice might be called "Paul" while another is called "Espeak Paul English US." In this case, you can put a numeric specifier before a voice name to select alternate occurances of that voice. Such a line might look like:
