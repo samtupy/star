@@ -32,6 +32,9 @@ def parse_textline(textline, aliases = {}):
 	params = "<" + voicename[2] if voicename[2] else ""
 	voicename = voicename[0]
 	if voicename.lower() in aliases: voicename = aliases[voicename.lower()]
+	voicename, delim, default_params = voicename.partition("<")
+	if default_params: default_params = "<" + default_params
+	params = params if params else default_params
 	return (voicename, params, text[2].strip())
 
 def slugify(text, space_replacement = "", char_passthroughs = [" ", "_", "-", ",", ".", "!"]):

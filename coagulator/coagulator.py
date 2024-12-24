@@ -16,7 +16,6 @@ def g(): pass #globals
 g.provider_rev = 3
 g.user_rev = 3
 g.next_client_id = 1
-g.config = configobj.ConfigObj("coagulator.ini")
 
 def parse_speech_meta(meta):
 	"""Takes speech metadata such as "Sam" or "Sam<r=4 p=-2>" and returns a dictionary of parsed properties such as voice, rate, and pitch."""
@@ -129,19 +128,21 @@ async def notify_all_clients(data, ignore_list = []):
 
 async def on_client_disconnect(ws, client_id):
 	"""Handles client disconnections, updating voice providers and speech requests as needed."""
-	lost_voice = False
-	for v in list(g.voices):
-		if client_id in g.voices[v]:
-			g.voices[v].remove(client_id)
-			if len(g.voices[v]) < 1:
-				del g.voices[v]
-				lost_voice = True
-	if lost_voice: await notify_all_clients({"voices": list(g.voices)}, [client_id])
-	for r in list(g.speech_requests):
-		if g.speech_requests[r][1] == ws:
-			await g.speech_requests[r][0]["ws"].send(json.dumps({"warning": f"provider servicing request {r} disappeared", "request_id": r}))
-		if g.speech_requests[r][0]["ws"] == ws or g.speech_requests[r][1] == ws:
-			del g.speech_requests[r]
+	try:
+		lost_voice = False
+		for v in list(g.voices):
+			if client_id in g.voices[v]:
+				g.voices[v].remove(client_id)
+				if len(g.voices[v]) < 1:
+					del g.voices[v]
+					lost_voice = True
+		if lost_voice: await notify_all_clients({"voices": list(g.voices)}, [client_id])
+		for r in list(g.speech_requests):
+			if g.speech_requests[r][1] == ws:
+				await g.speech_requests[r][0]["ws"].send(json.dumps({"warning": f"provider servicing request {r} disappeared", "request_id": r}))
+			if g.speech_requests[r][0]["ws"] == ws or g.speech_requests[r][1] == ws:
+				del g.speech_requests[r]
+	except websockets.exceptions.ConnectionClosedOK: pass
 
 async def client_handler(ws):
 	"""Manages WebSocket client connections."""
@@ -165,12 +166,108 @@ async def client_handler(ws):
 
 def handle_args():
 	"""Uses argparse to process and apply command line arguments."""
+	p = argparse.ArgumentParser(argument_default = argparse.SUPPRESS)
+	p.add_argument("--authless", action = "store_true")
+	p.add_argument("--config", nargs = "?", const = "coagulator.ini")
+	p.add_argument("--configure", action = "store_true")
+	g.args_parsed = p.parse_args(sys.argv[1:])
+	g.authless = "authless" in g.args_parsed and g.args_parsed.authless
+	g.do_configuration_interface = "configure" in g.args_parsed
+	if "config" in g.args_parsed: g.config_filename = g.args_parsed.config
+	else: g.config_filename = "coagulator.ini"
+
+def configuration():
+	"""Command line based configuration interface that allows modifying users, as well as changing the bind host/port and other properties."""
+	if not "users" in g.config: g.config["users"] = {}
+	def useradd(username = ""):
+		"""Also handles updating the password for an existing user."""
+		while True:
+			if not username: username = input("enter a username or leave blank to go back").strip()
+			if not username: return
+			if len(username) > 64:
+				print("exceeded recommended username length of less than 64 characters")
+				continue
+			pwd = input(" enter password or leave blank to go back").strip()
+			if not pwd: return
+			if not username in g.config["users"]: g.config["users"][username] = {}
+			g.config["users"][username]["password"] = pwd
+			break
+		print("configuration updated")
+	def usermod(username):
+		while username in g.config["users"]:
+			opt = input(f"options for {username}:\n1: change password\n2: delete user\nleave blank to go back")
+			if not opt: return
+			if not opt.isdigit():
+				print("only numbers accepted")
+				continue
+			opt = int(opt)
+			if opt == 1: useradd(username)
+			elif opt == 2: userdel(username)
+	def userdel(username):
+		confirm = input(f"Are you sure you want to delete the user {username}? Input y for yes or anything else to cancel.")
+		if confirm != "y": return
+		del(g.config["users"][username])
+		print("configuration updated")
+	def userlist():
+		while True:
+			if not "users" in g.config or len(g.config["users"]) < 1:
+				print("no users")
+				return
+			if len(g.config["users"]) != 1: print(f"There are {len(g.config['users'])} users, select one by it's number or leave blank to go back")
+			else: print("There is 1 user, select it by it's number or leave blank to go back")
+			for i, u in enumerate(g.config["users"]):
+				print(f"{i + 1}: {u}")
+			opt = input()
+			if not opt: return
+			if not opt.isdigit() or int(opt) < 1 or int(opt) > len(g.config["users"]):
+				print("must be a valid user number")
+				continue
+			usermod(list(g.config["users"])[int(opt) -1])
+	def set_var(varname, prompt, default = "", validator = None):
+		data = g.config.get(varname, default)
+		while True:
+			new_data = input(f"{prompt} (currently {data}), leave blank to go back without modifying value")
+			if not new_data: return
+			validate_fail = validator(new_data) if validator else ""
+			if validate_fail:
+				print(validate_fail)
+				continue
+			g.config[varname] = new_data
+			break
+		print("configuration updated")
+	options = [("add a user", "useradd"), ("change or delete a user", "usermod"), ("set bind address", "bindaddr"), ("set bind port", "bindport"), ("save and exit", "X"), ("exit without saving", "x")]
+	options_str = "Select an option, follow all input with return:\n"
+	for i, o in enumerate(options):
+		options_str += f"{i + 1}: {o[0]}\n"
+	while True:
+		opt = input(options_str)
+		if not opt: continue
+		if not opt.isdigit():
+			print("only digits accepted")
+			continue
+		opt = int(opt)
+		if opt < 1 or opt > len(options):
+			print(f"option {opt} out of range")
+			continue
+		opt = options[opt -1][1]
+		if opt == "useradd": useradd()
+		elif opt == "usermod": userlist()
+		elif opt == "bindaddr": set_var("bind_address", "enter address to bind to", "0.0.0.0")
+		elif opt == "bindport": set_var("bind_port", "enter port to bind to", 7774, lambda value: "port must be a number between 1 and 65535" if not value.isdigit() or int(value) < 1 or int(value) > 65535 else "")
+		elif opt == "X":
+			g.config.write()
+			print("configuration saved")
+			return
+		elif opt == "x": return
 
 async def main():
 	g.speech_requests = {}
 	g.voices = {}
 	g.clients = {}
-	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 5)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: "users" not in g.config or username in g.config["users"] and g.config["users"][username].get("password", "") == password)):
+	handle_args()
+	g.config = configobj.ConfigObj(g.config_filename)
+	if g.do_configuration_interface: return configuration()
+	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 5)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: g.authless or "users" in g.config and username in g.config["users"] and g.config["users"][username].get("password", "") == password)):
 		print("Coagulator up.")
 		await asyncio.get_running_loop().create_future()
 
