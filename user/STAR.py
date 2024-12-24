@@ -312,7 +312,7 @@ class star_client(wx.Frame):
 		self.render_total = 0
 		self.Show()
 		self.connection_abort = threading.Event()
-		if not self.configuration.validate():
+		if "host" in config and not self.configuration.validate():
 			r = self.on_options()
 			if not r: self.Close()
 		self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "")], daemon = True)
