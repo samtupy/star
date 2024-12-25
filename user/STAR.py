@@ -89,6 +89,7 @@ class playsound:
 		atexit.unregister(self.device.close)
 		self.device.close()
 		self.device = None
+		self.stream = None
 
 class speech_request:
 	"""Container class which stores various bits of information we wish to remember about an outgoing speech request."""
@@ -273,6 +274,8 @@ class star_client(wx.Frame):
 		self.render_title = wx.TextCtrl(self.main_panel)
 		self.render_btn = wx.Button(self.main_panel, label = "&Render to Disc")
 		self.render_btn.Bind(wx.EVT_BUTTON, self.on_render)
+		self.render_progress = wx.Gauge(self.main_panel, range = 100)
+		self.render_progress.Hide()
 		options_btn = wx.Button(self.main_panel, label = "&Options")
 		options_btn.Bind(wx.EVT_BUTTON, self.on_options)
 		exit_btn = wx.Button(self.main_panel, id = wx.NewIdRef(), label = "E&xit")
@@ -286,6 +289,7 @@ class star_client(wx.Frame):
 		sizer.Add(render_title_label, 0, wx.ALL, 5)
 		sizer.Add(self.render_title, 0, wx.ALL, 5)
 		sizer.Add(self.render_btn, 0, wx.ALL, 5)
+		sizer.Add(self.render_progress, 0, wx.ALL, 5)
 		sizer.Add(options_btn, 0, wx.ALL, 5)
 		sizer.Add(exit_btn, 0, wx.ALL, 5)
 		self.main_panel.SetSizer(sizer)
@@ -314,7 +318,7 @@ class star_client(wx.Frame):
 		self.connection_abort = threading.Event()
 		if "host" in config and not self.configuration.validate():
 			r = self.on_options()
-			if not r: self.Close()
+			if not r: return self.Close()
 		self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "")], daemon = True)
 		self.connection_thread.start()
 	def on_copy_voicename(self, evt):
@@ -457,7 +461,12 @@ class star_client(wx.Frame):
 		self.render_btn.Label = "Cancel"
 		if selected_renderable_lines: renderable_lines = selected_renderable_lines
 		self.render_total = len(renderable_lines)
-		for l in renderable_lines: self.audiospeak(l[1], render_filename = l[0])
+		self.render_progress.Range = self.render_total
+		self.render_progress.Value = 0
+		self.render_progress.Show()
+		for l in renderable_lines:
+			if not self.render_total: return # render canceled
+			self.audiospeak(l[1], render_filename = l[0])
 	def on_render_complete(self, canceled = False):
 		"""This is called on completion or cancelation of a render, and handles any UI work involved in displaying this fact while preparing for a new render."""
 		self.rendered_items = 0
@@ -478,6 +487,7 @@ class star_client(wx.Frame):
 		if hasattr(self, "render_output_path_tmp"): del(self.render_output_path_tmp)
 		self.render_btn.Label = "&Render to Disc"
 		playsound("audio/complete.ogg" if not canceled else "audio/cancel.ogg")
+		self.render_progress.Hide()
 	def on_options(self, evt = None):
 		"""Shows the options dialog and handles the saving of settings, either called as an event handler of the options button or else manually."""
 		canceled = False
@@ -606,7 +616,7 @@ class star_client(wx.Frame):
 			playsound("audio/warning.ogg")
 			speech.speak(message["warning"])
 			self.speech_requests_text = {}
-			if hasattr(self, "render_items"): self.render_items += 1
+			if hasattr(self, "rendered_items"): self.audiosave(None, None)
 	def on_remote_audio(self, id, audio):
 		"""Handles a remote audio payload, speaking it or saving it as a rendered item. Usually called from on_remote_binary"""
 		if not id in self.speech_requests: return # Rendering was likely canceled.
@@ -655,12 +665,15 @@ class star_client(wx.Frame):
 			self.speech_requests[r.request_id] = r
 			self.websocket.send(json.dumps({"user": USER_REVISION, "request": textline, "id": r.request_id}))
 	def audiosave(self, filename, audio):
-		"""Saves the contents of a bytes object (intended to be audio data) to the user's output directory, creating the output folder if necessary as well as handling some miscellaneous UI work related to rendering."""
-		if not os.path.isdir(self.render_output_path): os.makedirs(self.render_output_path)
-		with open(os.path.join(self.render_output_path, filename + ".wav"), "wb") as f: f.write(audio)
+		"""Saves the contents of a bytes object (intended to be audio data) to the user's output directory, creating the output folder if necessary as well as handling some miscellaneous UI work related to rendering. If filename or audio is not provided, the UI is updated standalone (used for things like render warnings that still need to increase the progress bar)."""
+		if filename and audio:
+			if not os.path.isdir(self.render_output_path): os.makedirs(self.render_output_path)
+			with open(os.path.join(self.render_output_path, filename + ".wav"), "wb") as f: f.write(audio)
+			wx.Yield()
 		self.rendered_items += 1
-		if self.rendered_items < self.render_total: playsound("audio/progress.ogg", pitch = 0.6 + float(self.rendered_items / self.render_total))
-		else: self.on_render_complete()
+		self.render_progress.Value = self.rendered_items
+		wx.Yield()
+		if self.rendered_items >= self.render_total: self.on_render_complete()
 
 def main():
 	app = wx.App()
