@@ -4,7 +4,6 @@ import configobj
 import ctypes
 import glob
 import json
-import miniaudio
 import os
 from pydub import AudioSegment
 from sound_lib.main import BassError
