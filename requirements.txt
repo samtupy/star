@@ -3,9 +3,9 @@ argparse
 audioop-lts; python_version>='3.13'
 configobj
 git+https://github.com/accessibleapps/platform_utils
-miniaudio
 mistune
 pydub
 pyinstaller
+sound_lib
 websockets
 WXPython

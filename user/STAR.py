@@ -1,11 +1,14 @@
 import accessible_output2.outputs.auto
 import atexit
 import configobj
+import ctypes
 import glob
 import json
 import miniaudio
 import os
 from pydub import AudioSegment
+from sound_lib.main import BassError
+from sound_lib import output, stream
 import tempfile
 import threading
 import time
@@ -16,7 +19,45 @@ import wx
 USER_REVISION = 3
 
 speech = accessible_output2.outputs.auto.Auto()
+sound_output=output.Output(0)
 config = configobj.ConfigObj("STAR.ini")
+
+playsound_devices = sound_output.get_device_names()
+playsound_device = playsound_devices.index(config.get("output_device", "Default"))
+if playsound_device > -1: playsound_device += 1
+sound_output.device = playsound_device
+playing_sounds = []
+class playsound:
+	"""A wrapper class around sound_lib, created to make upgrading from a previously used miniaudio based system easier."""
+	def __init__(self, data, finish_func = None, pitch = 1.0):
+		if type(data) == bytes:
+			self.data = ctypes.create_string_buffer(data)
+			data = ctypes.addressof(self.data)
+		self.handle = stream.FileStream(mem = type(data) != str, file = data, length = len(self.data) if type(data) != str else 0)
+		if not self.handle: return
+		self.handle.frequency *= pitch
+		for s in playing_sounds:
+			if not s.handle.is_playing and not s.handle.is_paused: playing_sounds.remove(s)
+		self.handle.play()
+		if finish_func:
+			self.finish_func = finish_func
+			threading.Thread(target = self.wait_for_finish, daemon = True).start()
+		playing_sounds.append(self)
+	def close(self):
+		if not self.handle: return
+		self.handle.free()
+		self.handle = None
+		if self in playing_sounds: playing_sounds.remove(self)
+	def pause(self):
+		return self.handle.pause() if self.handle else False
+	def resume(self):
+		return self.handle.play() if self.handle else False
+	@property
+	def playing(self): return self.handle.is_playing if self.handle else None
+	def wait_for_finish(self):
+		#Todo: Convert to bass sync when possible.
+		while self.finish_func and self.handle and (self.handle.is_playing or self.handle.is_paused): time.sleep(0.005)
+		if self.handle: self.finish_func(self)
 
 def is_valid_ws_uri(uri):
 	"""Helper function to insure a provided host is basically a valid websocket URI. Returns either True or an error string, doesn't really do all that much validation right now."""
@@ -43,53 +84,6 @@ def slugify(text, space_replacement = "", char_passthroughs = [" ", "_", "-", ",
 	for char in text:
 		if char.isalnum() or char in char_passthroughs: new_text += char
 	return new_text
-
-ma_devices = miniaudio.Devices()
-playsound_devices = ma_devices.get_playbacks()
-playsound_device = None
-def set_playsound_device(dev):
-	global playsound_device
-	if not dev:
-		playsound_device = None
-		return
-	for d in playsound_devices:
-		if d["name"] != dev: continue
-		playsound_device = d["id"]
-		break
-set_playsound_device(config.get("output_device", None))
-
-class playsound:
-	"""A small and very basic wrapper around pyminiaudio that gives us a basic audio stream class with pause, pitch, and end callback functionality. Pyminiaudio only wraps miniaudio's lowest level API, so we need something that couple's it's device and stream classes together."""
-	def __init__(self, data, pitch = 1.0, finish_func = None, finish_func_data = None):
-		self.finish_func = finish_func
-		self.finish_func_data = finish_func_data
-		if not data: return
-		self.device = miniaudio.PlaybackDevice(buffersize_msec = 5, sample_rate = int(44100 * pitch), device_id = playsound_device)
-		atexit.register(self.device.close)
-		if type(data) == bytes: self.stream = miniaudio.stream_with_callbacks(miniaudio.stream_memory(data, sample_rate = 44100), end_callback = self.on_stream_end)
-		else: self.stream = miniaudio.stream_with_callbacks(miniaudio.stream_file(data, sample_rate = 44100), end_callback = self.on_stream_end)
-		next(self.stream)
-		self.device.start(self.stream)
-	def __del__(self): self.close()
-	def on_stream_end(self):
-		if self.finish_func: self.finish_func(self.finish_func_data)
-		self.close() # must call below finish_func or finish_func doesn't fire
-	@property
-	def playing(self): return self.device is not None and self.device.running
-	def pause(self):
-		if not self.playing: return False
-		self.device.stop()
-		return True
-	def resume(self):
-		if not self.device or self.playing: return False
-		self.device.start(self.stream)
-		return True
-	def close(self):
-		if not getattr(self, "device", None): return
-		atexit.unregister(self.device.close)
-		self.device.close()
-		self.device = None
-		self.stream = None
 
 class speech_request:
 	"""Container class which stores various bits of information we wish to remember about an outgoing speech request."""
@@ -187,8 +181,7 @@ class star_client_configuration(wx.Dialog):
 		wx.StaticText(self, -1, "&Output Device")
 		self.output_devices = wx.ListCtrl(self, style = wx.LC_SINGLE_SEL | wx.LC_REPORT)
 		self.output_devices.AppendColumn("Device name")
-		self.output_devices.Append(["Default"])
-		for d in playsound_devices: self.output_devices.Append([d["name"]])
+		for d in playsound_devices: self.output_devices.Append([d])
 		device_idx = self.output_devices.FindItem(0, config.get("output_device", "Default"))
 		self.output_devices.Focus(device_idx)
 		self.output_devices.Select(device_idx)
@@ -292,6 +285,7 @@ class star_client(wx.Frame):
 		sizer.Add(self.render_progress, 0, wx.ALL, 5)
 		sizer.Add(options_btn, 0, wx.ALL, 5)
 		sizer.Add(exit_btn, 0, wx.ALL, 5)
+		sizer.SetSizeHints(self.main_panel)
 		self.main_panel.SetSizer(sizer)
 		toggle_speaking_id = wx.NewIdRef()
 		self.main_panel.Bind(wx.EVT_MENU, self.on_toggle_speaking, id = toggle_speaking_id)
@@ -299,6 +293,7 @@ class star_client(wx.Frame):
 		self.Connect(-1, -1, EVT_REMOTE, self.on_remote_event)
 		self.Connect(-1, -1, EVT_DONE_SPEAKING, self.on_auto_preview_next_script_line)
 		self.main_panel.Hide()
+		self.connecting_panel.Layout()
 		self.connecting_panel.Show()
 		self.connecting_label.SetFocus()
 		self.voices_list.InsertColumn(0, "voice name")
@@ -315,10 +310,11 @@ class star_client(wx.Frame):
 		self.script_continuous_preview = False
 		self.render_total = 0
 		self.Show()
+		self.Centre()
 		self.connection_abort = threading.Event()
 		if "host" in config and not self.configuration.validate():
 			r = self.on_options()
-			if not r: return self.Close()
+			if not r: return wx.Exit()
 		self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "")], daemon = True)
 		self.connection_thread.start()
 	def on_copy_voicename(self, evt):
@@ -506,14 +502,14 @@ class star_client(wx.Frame):
 			config["clear_output_on_render"] = self.configuration.clear_output_on_render.Value
 			old_device = config.get("output_device", None)
 			config["output_device"] = self.configuration.output_device
-			if old_device != config["output_device"]: set_playsound_device(config["output_device"])
+			if old_device != config["output_device"]: sound_output.device = playsound_devices.index(config["output_device"]) + 1
 			if old_host != config["host"] and evt: self.reconnect()
 			config.write()
 			break
 		if self.initial_connection: self.main_panel.SetFocus()
 		else: self.connecting_panel.SetFocus()
 		return not canceled
-	def on_exit_btn(self, evt): self.Close()
+	def on_exit_btn(self, evt): wx.Exit()
 	def on_toggle_speaking(self, evt):
 		"""Called when the user presses alt+backspace, pauses or resumes any currently playing speech."""
 		if not self.current_speech: return
@@ -582,6 +578,7 @@ class star_client(wx.Frame):
 			self.connecting_panel.Hide()
 			self.connecting_label.Label = "Connecting..."
 			self.main_panel.Show()
+			self.Layout()
 			self.main_panel.SetFocus()
 	def on_remote_binary(self, websocket, message):
 		"""Handles any remote binary messages received from the server, mostly a jumping off point to self.on_remote_audio after some parsing."""

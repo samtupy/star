@@ -17,7 +17,7 @@ jobs:
         curl -s -O https://samtupy.com/star_ci/balcon.exe
         curl -s -O https://samtupy.com/star_ci/sam.exe
         cd ..
-        pyinstaller --noconfirm STAR.spec
+        build
     - uses: actions/upload-artifact@v4
       with:
         name: STAR_win64

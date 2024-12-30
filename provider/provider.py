@@ -220,3 +220,5 @@ class star_provider:
 		c = star_provider_configurator(self)
 		if c.ShowModal() == wx.ID_OK: c.save()
 
+if __name__ == "__main__":
+	print("Warning, this script is not meant to be run directly, it serves as the base class for all python based STAR providers.\nYou probably want to run balcony.py, macsay.py etc instead both to run and configure each provider.")
