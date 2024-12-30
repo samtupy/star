@@ -123,7 +123,7 @@ class star_provider:
 		p.add_argument("--configure", action = "store_true")
 		p.add_argument("--hosts", nargs = "+")
 		self.args_parsed = p.parse_args(sys.argv[1:])
-		if "hosts" in self.args_parsed: self.hosts = self.args_parsed["hosts"]
+		if "hosts" in self.args_parsed: self.hosts = self.args_parsed.hosts
 		if "configure" in self.args_parsed: self.do_configuration_interface = True
 		if "config" in self.args_parsed: self.config_filename = self.args_parsed.config
 	def get_voices(self):

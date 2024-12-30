@@ -1,9 +1,10 @@
+import os
 import subprocess
 from provider import star_provider
 
 class balcony(star_provider):
 	def get_voices(self):
-		raw = subprocess.run(["balcon", "-l"], shell = True, capture_output = True, text = True).stdout.split("\n")
+		raw = subprocess.run([os.path.join(os.path.abspath(os.path.dirname(__file__)), "balcon"), "-l"], shell = True, capture_output = True, text = True).stdout.split("\n")
 		voices = []
 		for v in raw:
 			if not v or not v.startswith(" "): continue
@@ -13,4 +14,4 @@ class balcony(star_provider):
 		return voices
 
 if __name__ == "__main__":
-	balcony("balcony", synthesis_process = ["balcon", "-n", "{voice}", "-t", "{text}", "-w", "{filename}"], synthesis_process_rate = ["-s", "{rate}"], synthesis_process_pitch = ["-p", "{pitch}"])
+	balcony("balcony", synthesis_process = [os.path.join(os.path.abspath(os.path.dirname(__file__)), "balcon"), "-n", "{voice}", "-t", "{text}", "-w", "{filename}"], synthesis_process_rate = ["-s", "{rate}"], synthesis_process_pitch = ["-p", "{pitch}"])

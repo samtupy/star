@@ -9,6 +9,7 @@ from pydub import AudioSegment
 from sound_lib.main import BassError
 from sound_lib import output, stream
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -159,6 +160,48 @@ class remote_event(wx.PyEvent):
 		self.SetEventType(EVT_REMOTE)
 		self.data = data
 
+class star_local:
+	"""This class facilitates a convenient local STAR stack for cases when no remote servers are available. When created the coagulator and some providers are run, and when destroyed the child processes are terminated."""
+	def __init__(self, client):
+		self.client = client
+		self.abort = threading.Event()
+		self.start()
+	def __del__(self): self.stop()
+	def start_coagulator(self, silent = False):
+		self.coagulator = subprocess.Popen([sys.executable, "../coagulator/coagulator.py", "--authless"] if not hasattr(sys, "frozen") else ["coagulator", "--authless"], creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+		return True
+	def start_main_provider(self, silent = False):
+		# Todo: Turn this into a list of providers or even processes to avoid repetative code, so tired now.
+		provider = ""
+		if sys.platform == "win32": provider = "balcony"
+		elif sys.platform == "darwin": provider = "macsay"
+		else: self.main_provider = None
+		if provider: self.main_provider = subprocess.Popen([sys.executable, os.path.join("..", "provider", provider + ".py"), "--hosts", "ws://127.0.0.1:7774"] if not hasattr(sys, "frozen") else [provider, "--hosts", "ws://127.0.0.1:7774"])
+		return True
+	def start(self, silent = False):
+		if not self.start_main_provider(silent): return False
+		if not self.start_coagulator(silent): return False
+		self.abort.clear()
+		threading.Thread(target = self.monitor, daemon = True).start()
+		return True
+	def keepalive_check(self, result, message):
+		if result: return
+		config["host"] = ""
+		config.write()
+		wx.MessageDialog(self.client, message, "local STAR error", wx.OK)
+		self.client.Close()
+		wx.Exit()
+	def monitor(self):
+		while not self.abort.wait(1):
+			if self.coagulator.poll() != None:
+				wx.CallAfter(self.keepalive_check, self.start_coagulator(True), "failed to recover terminated coagulator")
+			if self.main_provider.poll() != None:
+				wx.CallAfter(self.keepalive_check, self.start_main_provider(True), "failed to recover terminated coagulator")
+	def stop(self):
+		self.abort.set()
+		if self.coagulator: self.coagulator.terminate()
+		if self.main_provider: self.main_provider.terminate()
+
 class star_client_configuration(wx.Dialog):
 	"""This dialog is activated when the user clicks the options button in the main window."""
 	def __init__(self, parent):
@@ -250,7 +293,10 @@ class star_client(wx.Frame):
 		self.configuration = star_client_configuration(self)
 		self.main_panel = wx.Panel(self)
 		self.connecting_panel = wx.Panel(self)
-		self.connecting_label = wx.StaticText(self.connecting_panel, -1, "Connecting..." if "host" in config else "Host not configured.")
+		self.connecting_label = wx.StaticText(self.connecting_panel, -1, "Connecting..." if "host" in config and config["host"] != "" else "Host not configured.")
+		self.run_local_btn = wx.Button(self.connecting_panel, label = "Run &locally")
+		self.run_local_btn.Bind(wx.EVT_BUTTON, self.on_run_local)
+		self.run_local_btn.Enabled = config.get("host", "") != "local"
 		wx.Button(self.connecting_panel, label = "&Options").Bind(wx.EVT_BUTTON, self.on_options)
 		wx.Button(self.connecting_panel, label = "&Exit").Bind(wx.EVT_BUTTON, self.on_exit_btn)
 		sizer = wx.BoxSizer()
@@ -311,6 +357,7 @@ class star_client(wx.Frame):
 		self.connecting_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, toggle_speaking_id), (wx.ACCEL_NORMAL, wx.WXK_ESCAPE, exit_btn.Id)]))
 		self.Connect(-1, -1, EVT_REMOTE, self.on_remote_event)
 		self.Connect(-1, -1, EVT_DONE_SPEAKING, self.on_auto_preview_next_script_line)
+		self.Bind(wx.EVT_CLOSE, self.on_exit)
 		self.main_panel.Hide()
 		self.connecting_panel.Layout()
 		self.connecting_panel.Show()
@@ -331,11 +378,17 @@ class star_client(wx.Frame):
 		self.Show()
 		self.Centre()
 		self.connection_abort = threading.Event()
-		if "host" in config and not self.configuration.validate():
+		if "host" in config and config["host"] != "" and not self.configuration.validate():
 			r = self.on_options()
 			if not r: return wx.Exit()
-		self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "")], daemon = True)
+		self.check_local()
+		self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "") if not self.local else "ws://127.0.0.1:7774"], daemon = True)
 		self.connection_thread.start()
+	def check_local(self):
+		"""If the host is 'local', set up a star_local object. Otherwise, destroy it thus terminating the child coagulator and providers."""
+		if config.get("host", "") == "local": self.local = star_local(self)
+		else: self.local = None
+		self.run_local_btn.Enabled = config.get("host", "") != "local"
 	def on_copy_voicename(self, evt):
 		"""Copies the currently focused voice name to the clipboard, called when ctrl+c is pressed on a voice name in the voices list."""
 		voice = self.voices_list.FocusedItem
@@ -503,6 +556,12 @@ class star_client(wx.Frame):
 		self.render_btn.Label = "&Render to Disc"
 		playsound("audio/complete.ogg" if not canceled else "audio/cancel.ogg")
 		self.render_progress.Hide()
+	def on_run_local(self, evt):
+		"""If this button is clicked from the connection panel, spin up a local STAR stack and initiate a connection to it."""
+		config["host"] = "local"
+		config.write()
+		self.check_local()
+		self.reconnect()
 	def on_options(self, evt = None):
 		"""Shows the options dialog and handles the saving of settings, either called as an event handler of the options button or else manually."""
 		canceled = False
@@ -532,7 +591,16 @@ class star_client(wx.Frame):
 		if self.initial_connection: self.main_panel.SetFocus()
 		else: self.connecting_panel.SetFocus()
 		return not canceled
-	def on_exit_btn(self, evt): wx.Exit()
+	def on_exit_btn(self, evt):
+		self.Close()
+		wx.Exit()
+	def on_exit(self, evt):
+		"""This is called when the main window is closing, and allows us to do some cleanup."""
+		self.Hide()
+		if self.websocket: self.websocket.close()
+		if self.local: self.local.stop()
+		self.local = None
+		evt.Skip()
 	def on_toggle_speaking(self, evt):
 		"""Called when the user presses alt+backspace, pauses or resumes any currently playing speech."""
 		if not self.current_speech: return
@@ -555,7 +623,7 @@ class star_client(wx.Frame):
 		if label_change: self.connecting_label.SetFocus()
 		self.main_panel.Hide()
 		if full:
-			self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "")], daemon = True)
+			self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "") if not self.local else "ws://127.0.0.1:7774"], daemon = True)
 			self.connection_thread.start()
 	def connect(self, host):
 		"""The bulk of the websocket handling logic, runs as an extra thread during the entire live state of a connection which post our custom wx EVT_REMOTE events which will in turn call into various helper methods such as on_connect, on_remote_binary, on_remote_message etc."""
