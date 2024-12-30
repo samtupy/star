@@ -9,7 +9,7 @@ This is a set of components intended to ease the creation of audio productions t
 This setup involves 3 components:
 
 ### User client
-The frontend to this application involves the user client. This application is responsible for requesting synthesis and outputting the results.
+The frontend to this application involves the user client. This application is responsible for requesting synthesis and outputting the results. Separate [user client documentation](user/readme.md) is provided which also explains the script syntax.
 
 ### Speech Providers
 The task of these components is to translate text to speech depending on the voices available on a given system. A provider can run anywhere TTS voices are available, and some providers might be platform-agnostic as they might synthesize tts from cloud providers like Google or Amazon.
@@ -25,17 +25,17 @@ Pretty much this entire project is written in python sans a couple of providers 
 2. Activate the virtual environment you just created: on windows `venv\scripts\activate`, on MacOS `source venv/bin/activate`, or on Linux `venv/bin/activate`
 3. Install requirements: `pip install -r requirements.txt`
 4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory.
+5. If you want to use the sammy provider, you need the sam.exe synthesizer. You can just download the one the build workflow uses [from here](https://samtupy.com/star_ci/sam.exe) if you like, or else I built that from [this repository](https://github.com/s-macke/SAM) with the SConstruct line `Program("sam", Glob("src/*.c"), CPPFLAGS = ["/Os"])` if you'd rather build it yourself. Regardless, you'll want to place sam.exe in the provider folder.
 
 From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do. You'll likely want to configure the coagulator/provider first, and so everything accept the user client supports a --configure command line argument which brings up a configuration interface, and/or --config filename.ini to load configuration from a specified path (useful for things like unix daemons).
 
 If you want to create a complete local stack in one shell window, at least on windows you can use pythonw instead of python to run the coagulator and the provider in windows mode which will not block your terminal.
 
-If you wish to build the binaries, you can run pyinstaller STAR.spec from the repository's root directory after generating the readme.html file by running python user/html_readme.py.
+If you wish to build the binaries, you can run `/.build.bat` on windows or `pyinstaller --noconfirm STAR.spec` on other platforms from the repository's root directory after generating the readme.html file by running python user/html_readme.py.
 
 You only need to set up a virtual environment the first time you clone the repository, after which you only need to activate it every time you open a terminal window up to the root of the repository.
 
 ## API
-
 You can skip this section unless you wish to contribute to the project, want to know how it works, or intend to write new providers or clients.
 
 This project uses web sockets for communication. The coagulator is what acts as the web socket server, and is written in python. Both speech providers and user clients connect to it. All payloads accept for the audio data itself are in json, and I can't imagine a way to make the API any more simple.

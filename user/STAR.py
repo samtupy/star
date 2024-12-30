@@ -8,6 +8,7 @@ import os
 from pydub import AudioSegment
 from sound_lib.main import BassError
 from sound_lib import output, stream
+import subprocess
 import tempfile
 import threading
 import time
@@ -164,8 +165,12 @@ class star_client_configuration(wx.Dialog):
 		"""Composes the UI elements for the dialog."""
 		wx.Dialog.__init__(self, parent, title = "STAR Client Configuration")
 		host_label = wx.StaticText(self, -1, "&Host to connect to")
-		self.host = wx.TextCtrl(self, value = config.get("host", ""))
-		self.host.SetHint("for example ws://username:password@server.com:7774")
+		self.host = wx.ComboBox(self, value = config.get("host", ""))
+		self.host.Bind(wx.EVT_COMBOBOX, self.on_host_selection_change)
+		self.host.Bind(wx.EVT_TEXT, self.on_host_text_change)
+		self.host.SetHint("for example ws://username:password@server.com:7774 or the string local")
+		self.delete_host_btn = wx.Button(self, label = "&Delete saved host")
+		self.delete_host_btn.Bind(wx.EVT_BUTTON, self.on_delete_saved_host)
 		render_path_label = wx.StaticText(self, -1, "Default &Render location")
 		self.render_path = wx.DirPickerCtrl(self, path = config.get("render_path", os.path.join(os.getcwd(), "output")), message = "Select a default directory to render output into")
 		render_path_label.Reparent(self.render_path)
@@ -195,12 +200,26 @@ class star_client_configuration(wx.Dialog):
 		device_idx = self.output_devices.FindItem(0, config.get("output_device", "Default"))
 		self.output_devices.Focus(device_idx)
 		self.output_devices.Select(device_idx)
+		self.host.SetItems(config.get("previous_hosts", ["local"]))
+		self.host.Value = config.get("host", "")
 		self.host.SetFocus()
+		self.delete_host_btn.Enabled = self.host.Value != "local" and self.host.FindString(self.host.Value) != wx.NOT_FOUND
 	def on_clear_cache(self, evt):
 		self.Parent.speech_cache = {}
 		self.Parent.aliases_modified = True
 		self.Parent.speech_requests_text = {}
 		self.clear_cache_btn.Enabled = False
+	def on_delete_saved_host(self, evt):
+		sel = self.host.Selection if self.host.Selection != wx.NOT_FOUND else self.host.FindString(self.host.Value)
+		if sel == wx.NOT_FOUND: return
+		self.host.Delete(sel)
+		self.host.Selection = 0
+		self.delete_host_btn.Enabled = self.host.Selection != -1 and self.host.Value != "local"
+		self.host.SetFocus()
+	def on_host_selection_change(self, evt):
+		self.delete_host_btn.Enabled = self.host.Selection != -1 and self.host.Value != "local"
+	def on_host_text_change(self, evt):
+		self.delete_host_btn.Enabled = self.host.Value != "local" and self.host.FindString(self.host.Value) != -1
 	def validate_fail(self, message, control):
 		"""This is just a small utility that shows a message and focuses a control, used for showing options validation failures."""
 		dlg = wx.MessageDialog(self, message, "error")
@@ -210,7 +229,7 @@ class star_client_configuration(wx.Dialog):
 		"""Insures that values entered into the options dialog are sane, showing error dialogs if not and returning a boolean value in either case (True for validated settings)."""
 		self.output_device = self.output_devices.GetItemText(self.output_devices.FocusedItem)
 		render_fn = render_filename(1, 10, "Voice Orig", "Voice", "Text string", self.render_filename_template.Value).filename
-		is_uri = is_valid_ws_uri(self.host.Value)
+		is_uri = self.host.Value == "local" or is_valid_ws_uri(self.host.Value)
 		preview_txt = ""
 		try: self.voice_preview_text.Value.format(voice = "Voice")
 		except Exception as e: preview_txt = e
@@ -289,6 +308,7 @@ class star_client(wx.Frame):
 		toggle_speaking_id = wx.NewIdRef()
 		self.main_panel.Bind(wx.EVT_MENU, self.on_toggle_speaking, id = toggle_speaking_id)
 		self.main_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, toggle_speaking_id), (wx.ACCEL_NORMAL, wx.WXK_ESCAPE, exit_btn.Id)]))
+		self.connecting_panel.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_ALT, wx.WXK_BACK, toggle_speaking_id), (wx.ACCEL_NORMAL, wx.WXK_ESCAPE, exit_btn.Id)]))
 		self.Connect(-1, -1, EVT_REMOTE, self.on_remote_event)
 		self.Connect(-1, -1, EVT_DONE_SPEAKING, self.on_auto_preview_next_script_line)
 		self.main_panel.Hide()
@@ -494,6 +514,10 @@ class star_client(wx.Frame):
 			if not self.configuration.validate(): continue
 			old_host = config.get("host", "")
 			config["host"] = self.configuration.host.Value
+			config["previous_hosts"] = self.configuration.host.GetItems()
+			if not config["host"] in config["previous_hosts"]:
+				config["previous_hosts"].insert(0, config["host"])
+				self.configuration.host.Insert(config["host"], 0)
 			config["render_path"] = self.configuration.render_path.Path
 			config["render_filename_template"] = self.configuration.render_filename_template.Value
 			config["render_consolidated_silence"] = self.configuration.render_consolidated_silence.Value

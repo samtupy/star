@@ -1,4 +1,4 @@
-# The original source code for this program is in coagulator_old.py. I wrote it using what turned out to be a noncompliant and incomplete web_socket_server framework, so I asked ChatGPT to rewrite it using the python websockets framework and then modified the result to make it work. In the end, Chat GPT is responsible for the asyncio stuff mostly.
+# The original source code for this program is in ../old/coagulator.py. I wrote it using what turned out to be a noncompliant and incomplete web_socket_server framework, so I asked ChatGPT to rewrite it using the python websockets framework and then modified the result to make it work. In the end, Chat GPT is responsible for the asyncio stuff mostly, though even some of that has changed since.
 
 import asyncio
 import argparse
@@ -169,12 +169,20 @@ def handle_args():
 	p = argparse.ArgumentParser(argument_default = argparse.SUPPRESS)
 	p.add_argument("--authless", action = "store_true")
 	p.add_argument("--config", nargs = "?", const = "coagulator.ini")
+	p.add_argument("--host", nargs = "?", const = "0.0.0.0")
+	p.add_argument("--port", nargs = "?", type=int, const = 7774)
 	p.add_argument("--configure", action = "store_true")
 	g.args_parsed = p.parse_args(sys.argv[1:])
 	g.authless = "authless" in g.args_parsed and g.args_parsed.authless
 	g.do_configuration_interface = "configure" in g.args_parsed
 	if "config" in g.args_parsed: g.config_filename = g.args_parsed.config
 	else: g.config_filename = "coagulator.ini"
+	g.config = configobj.ConfigObj(g.config_filename)
+	if "host" in g.args_parsed: g.config["bind_address"] = g.args_parsed.host
+	if "port" in g.args_parsed:
+		if g.args_parsed.port < 1 or g.args_parsed.port > 65535: sys.exit("bind port must be between 1 and 65535")
+		g.config["bind_port"] = g.args_parsed.port
+
 
 def configuration():
 	"""Command line based configuration interface that allows modifying users, as well as changing the bind host/port and other properties."""
@@ -265,7 +273,6 @@ async def main():
 	g.voices = {}
 	g.clients = {}
 	handle_args()
-	g.config = configobj.ConfigObj(g.config_filename)
 	if g.do_configuration_interface: return configuration()
 	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 5)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: g.authless or "users" in g.config and username in g.config["users"] and g.config["users"][username].get("password", "") == password)):
 		print("Coagulator up.")
