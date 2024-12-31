@@ -21,7 +21,7 @@ USER_REVISION = 3
 
 speech = accessible_output2.outputs.auto.Auto()
 sound_output=output.Output(0)
-config = configobj.ConfigObj("STAR.ini")
+config = configobj.ConfigObj(os.path.join(os.path.dirname(__file__), "STAR.ini"))
 
 playsound_devices = sound_output.get_device_names()
 playsound_device = playsound_devices.index(config.get("output_device", "Default"))
@@ -560,7 +560,6 @@ class star_client(wx.Frame):
 		"""If this button is clicked from the connection panel, spin up a local STAR stack and initiate a connection to it."""
 		config["host"] = "local"
 		config.write()
-		self.check_local()
 		self.reconnect()
 	def on_options(self, evt = None):
 		"""Shows the options dialog and handles the saving of settings, either called as an event handler of the options button or else manually."""
@@ -613,6 +612,7 @@ class star_client(wx.Frame):
 			self.connection_thread.join()
 			self.connection_thread = None
 		self.initial_connection = False
+		self.check_local()
 		self.speech_requests = {}
 		self.speech_requests_text = {}
 		self.voices = {}
@@ -764,6 +764,7 @@ class star_client(wx.Frame):
 		if self.rendered_items >= self.render_total: self.on_render_complete()
 
 def main():
+	os.chdir(os.path.dirname(__file__))
 	app = wx.App()
 	client = star_client()
 	app.MainLoop()

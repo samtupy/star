@@ -1,0 +1,18 @@
+# Systemd unit for the STAR coagulator
+# Be sure to modify the USER= line below to match your username. Otherwise left unaltered, this service expects the star repository to be cloned at /home/username/star, and for a virtual environment to exist within the root of the repository called venv.
+
+[Unit]
+Description=STAR Coagulation Server
+After=network.target
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+ExecStart=%s -c "~/star/venv/bin/python ~/star/coagulator/coagulator.py --config ~/star/coagulator/coagulator.ini"
+Restart=always
+User=USERNAME
+
+[Install] 
+WantedBy=network.target
+
+

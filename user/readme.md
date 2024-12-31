@@ -1,18 +1,18 @@
 # STAR user client documentation
 The STAR user client is the frontend interface to this relay system. With it, you can connect to any coagulator you know about before synthesizing text into either audio that is played through speakers or rendered to audio files.
 
-Almost all of the star client's functionality can be accessed via keyboard shortcuts.
+If you are trying to learn how to host a coagulator so that your friends can share voices, then this [coagulator quickstart guide](https://github.com/samtupy/star/blob/main/coagulator/readme.md) on STAR's github will help you do that.
+
+Almost all of the star client's functionality can be accessed via keyboard shortcuts, usually alt+letter.
 
 ## First time run instructions
 To run the STAR client, simply click on STAR.exe or the equivalent on other platforms.
 
-The first time the client is executed, you will see a simple screen with a status message informing you that the host is not configured, along with 2 buttons (Options and Exit). It is required that a valid configuration file exist to use this client, so one pass through the options dialog is needed.
+The first time the client is executed, you will see a simple screen with a status message informing you that the host is not configured, along with 3 buttons (Run locally, Options and Exit). If you are not part of a group and do not wish to use STAR's networking features, simply click Run Locally and you should be set to go! Otherwise, it is required that a valid configuration file containing at least one remote host exists to use this client, so one pass through the options dialog is needed. In that case you will want to click the options button, then set a valid host address to connect to, "ws://user:password@samtupy.com:7774" withoutt the quotes, for example.
 
-You will want to click the options button, then set a valid host address to connect to, "ws://user:password@samtupy.com:7774" withoutt the quotes, for example.
+Once you've clicked the Run Locally button or else OK in the options dialog after setting a host, you will be returned to the main STAR client screen if applicable accept that the status message will have now switched to the word connecting. When a connection is successfully established, the true main screen of STAR will appear.
 
-Once you've clicked OK in the options dialog after setting a host, you will be returned to the main STAR client screen accept that the status message will have now switched to the word connecting. When a connection is successfully established, the true main screen of STAR will appear.
-
-From this point the host you've set is stored in a configuration file, so further launches of the client will instantly connect to the host you've configured.
+From this point your connection choice is stored in a configuration file, meaning that restarting the STAR client will simply reconnect to the saved host or spin up a local coagulator and providers and connect to that based on your saved preference. You can of course change this preference from the options dialog at any time.
 
 ## Main client screen
 Once you've successfully connected to a remote coagulator, you will be presented with the actual main client interface, which contains access to the bulkk of the programs functionality.
@@ -120,6 +120,7 @@ This is a major update to STAR which includes a complete user client rewrite and
 * Due to the script text field being a true richtext control, the previewing hotkeys were changed to control+alt+up, down, and space rather than just control. This was forced on us because NVDA at least seems to always speak when control+up and down are pressed on a text field regardless of any application code.
 * It is now possible to press ctrl+alt+enter on any valid speech line in the script to begin auto previewing the entire script up to it's end or the next error.
 * You can press alt+backspace anywhere in the main screen to pause and resume any playing speech, thus the stop currently playing speech button was removed from the interface.
+* The STAR client can now run all needed components such as the coagulator and providers locally with one click, meaning that STAR should require 0 extra setup assuming you just want to use only the voices on your computer!
 * There is now an options dialog with various customizations you can make from the render filename template to the default render output location to the voice preview text and more.
 * Now that the options dialog exists, the output device list has been moved to that dialog.
 * It is now possible to consolidate the entire script into one audio file! Next to the script field, there is an output subdirectory or consolidated filename field. If you set thhis to a filename such as output.wav instead of a folder name such as output, now a single output.wav file will be created containing all voice clips seperated by a configurable amount of silence.
