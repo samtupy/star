@@ -97,10 +97,8 @@ class speech_request:
 		speech_request.next_request_id += 1
 
 render_filename_tokens = [
-	("counter0", "A counter in the format 0, 1, 2...", lambda render: str(render.counter -1)),
-	*[(f"counter{'0' * (i + 2)}", f"A counter in the format {', '.join([str(x).zfill(i + 2) for x in range(3)])}...", lambda render, i = i: str(render.counter -1).zfill(i + 2)) for i in range(3)],
-	("counter1", "A counter in the format 1, 2, 3...", lambda render: str(render.counter)),
-	*[(f"counter{'0' * (i + 1)}1", f"A counter in the format {', '.join([str(x + 1).zfill(i + 2) for x in range(3)])}...", lambda render, i = i: str(render.counter).zfill(i + 2)) for i in range(3)],
+	*[(f"counter{'0' * (i + 1)}", f"A counter in the format {', '.join([str(x).zfill(i + 1) for x in range(3)])}...", lambda render, i = i: str(render.counter -1).zfill(i + 1)) for i in range(4)],
+	*[(f"counter{'0' * i}1", f"A counter in the format {', '.join([str(x + 1).zfill(i + 1) for x in range(3)])}...", lambda render, i = i: str(render.counter).zfill(i + 1)) for i in range(4)],
 	*[(f"line{'0' * i}0", f"The item's 0-based line number in the format {', '.join([str(x).zfill(i + 1) for x in range(3)])}...", lambda render, i = i: str(render.line -1).zfill(i + 1)) for i in range(4)],
 	*[(f"line{'0' * i}1", f"The item's line number in the format {', '.join([str(x + 1).zfill(i + 1) for x in range(3)])}...", lambda render, i = i: str(render.line).zfill(i + 1)) for i in range(4)],
 	("voice", "The item's voice name as typed", lambda render: render.original_voice),
@@ -111,7 +109,8 @@ render_filename_tokens = [
 	("voice_slug_aliased", "The item's lowercased voice name after alias replacement with extraneous characters removed and spaces replaced with underscores", lambda render: slugify(render.voice.lower(), space_replacement = "_", char_passthroughs = ["_"])),
 	("text", "The item's text altered minimally to fit in a filename", lambda render: slugify(render.text[:200])),
 	("text1", "The first word of the item's text", lambda render: slugify(" ".join(render.text[:200].split(" ")[:1]))),
-	*[(f"text{i}", f"The item's first {i} words of text", lambda render, i = i: slugify(" ".join(render.text[:200].split(" ")[:i]))) for i in [2, 3, 5, 10, 15, 20]]
+	*[(f"text{i}", f"The item's first {i} words of text", lambda render, i = i: slugify(" ".join(render.text[:200].split(" ")[:i]))) for i in [2, 3, 5, 10, 15, 20]],
+	("date", f"the date in the format {time.strftime("%Y-%m-%d")}", lambda render: time.strftime("%Y-%m-%d")),
 ]
 
 def render_filename_tokens_help():
@@ -165,42 +164,29 @@ class star_local:
 	def __init__(self, client):
 		self.client = client
 		self.abort = threading.Event()
+		self.processes = [["coagulator", [sys.executable, "../coagulator/coagulator.py", "--authless"] if not hasattr(sys, "frozen") else ["coagulator", "--authless"], None]]
+		provider = "balcony" if sys.platform == "win32" else "macsay" if sys.platform == "darwin" else None
+		if provider: self.processes.append([f"{provider} provider", [sys.executable, os.path.join("..", "provider", provider + ".py"), "--hosts", "ws://127.0.0.1:7774"] if not hasattr(sys, "frozen") else [provider, "--hosts", "ws://127.0.0.1:7774"], None])
+		if sys.platform == "win32": self.processes.append(["sammy provider", [sys.executable, os.path.join("..", "provider", "sammy.py"), "--hosts", "ws://127.0.0.1:7774"] if not hasattr(sys, "frozen") else ["sammy", "--hosts", "ws://127.0.0.1:7774"], None])
 		self.start()
 	def __del__(self): self.stop()
-	def start_coagulator(self, silent = False):
-		self.coagulator = subprocess.Popen([sys.executable, "../coagulator/coagulator.py", "--authless"] if not hasattr(sys, "frozen") else ["coagulator", "--authless"], creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-		return True
-	def start_main_provider(self, silent = False):
-		# Todo: Turn this into a list of providers or even processes to avoid repetative code, so tired now.
-		provider = ""
-		if sys.platform == "win32": provider = "balcony"
-		elif sys.platform == "darwin": provider = "macsay"
-		else: self.main_provider = None
-		if provider: self.main_provider = subprocess.Popen([sys.executable, os.path.join("..", "provider", provider + ".py"), "--hosts", "ws://127.0.0.1:7774"] if not hasattr(sys, "frozen") else [provider, "--hosts", "ws://127.0.0.1:7774"])
-		return True
 	def start(self, silent = False):
-		if not self.start_main_provider(silent): return False
-		if not self.start_coagulator(silent): return False
 		self.abort.clear()
+		for p in self.processes:
+			p[2] = subprocess.Popen(p[1], creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
 		threading.Thread(target = self.monitor, daemon = True).start()
+		atexit.register(self.stop)
 		return True
-	def keepalive_check(self, result, message):
-		if result: return
-		config["host"] = ""
-		config.write()
-		wx.MessageDialog(self.client, message, "local STAR error", wx.OK)
-		self.client.Close()
-		wx.Exit()
 	def monitor(self):
 		while not self.abort.wait(1):
-			if self.coagulator.poll() != None:
-				wx.CallAfter(self.keepalive_check, self.start_coagulator(True), "failed to recover terminated coagulator")
-			if self.main_provider.poll() != None:
-				wx.CallAfter(self.keepalive_check, self.start_main_provider(True), "failed to recover terminated coagulator")
+			for p in self.processes:
+				if p[2].poll() != None: p[2] = subprocess.Popen(p[1], creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
 	def stop(self):
 		self.abort.set()
-		if self.coagulator: self.coagulator.terminate()
-		if self.main_provider: self.main_provider.terminate()
+		for p in self.processes:
+			if p[2]: p[2].terminate()
+			p[2] = None
+		atexit.unregister(self.stop)
 
 class star_client_configuration(wx.Dialog):
 	"""This dialog is activated when the user clicks the options button in the main window."""
@@ -387,7 +373,9 @@ class star_client(wx.Frame):
 	def check_local(self):
 		"""If the host is 'local', set up a star_local object. Otherwise, destroy it thus terminating the child coagulator and providers."""
 		if config.get("host", "") == "local": self.local = star_local(self)
-		else: self.local = None
+		else:
+			if hasattr(self, "local") and self.local: self.local.stop()
+			self.local = None
 		self.run_local_btn.Enabled = config.get("host", "") != "local"
 	def on_copy_voicename(self, evt):
 		"""Copies the currently focused voice name to the clipboard, called when ctrl+c is pressed on a voice name in the voices list."""
@@ -558,6 +546,7 @@ class star_client(wx.Frame):
 		self.render_progress.Hide()
 	def on_run_local(self, evt):
 		"""If this button is clicked from the connection panel, spin up a local STAR stack and initiate a connection to it."""
+		if self.local: return wx.MessageDialog(self, "Already attempting to establish local setup", "error", wx.OK)
 		config["host"] = "local"
 		config.write()
 		self.reconnect()

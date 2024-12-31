@@ -30,7 +30,7 @@ The controls on this screen are as follows:
 * output subdirectory or consolidated filename (alt+d): Here, you can choose specifically where the output of the next render will be placed within the global render output directory. If it's left empty, new .wav files will be added to the root of the globally configured output directory that is specified in the options dialog. Otherwise a subdirectory with the name specified in this field will be created to store new output. If the contents of this field end with a .wav (or even .mp3 if you have ffmpeg on your computer), all speech clips will be consolidated into the one filename specified instead of as individual .wav files.
 * render to disc (alt+r): This button begins the process of synthesizing and rendering any script text that's been provided. It's label will switch to "Cancel" when rendering is in progress.
 * options (alt+o): Open the options dialog.
-* exit (alt+e): Exit the program, can also be done with alt+f4.
+* exit (alt+e): Exit the program, can also be done with alt+f4 or escape. When using the run locally option it's always best to exit cleanly rather than killing the process in task manager or ctrl+c in the terminal etc, otherwise the local coagulator and providers launched by the client won't be terminated properly and you'll then need to kill them yourself.
 
 You can also press alt+backspace to pause or resume any playing speech from any place in the main screen.
 
@@ -112,6 +112,18 @@ The final supported feature in the script format allows for selective rendering.
 ```
 
 Here, we've selected only the 2 final lines in the script for rendering, but those lines will maintain the proper file counter. While this is also useful for editing existing lines, it may be somewhat less useful when trying to add lines in the middle of your script as doing so will invalidate the incrementing file/clip counter for any lines after the addition/deletion point. You can have as many blocks of selected lines as you wish. Another useful trick with this is that you can effectively disable render selection blocks without deleting them. Since any nesting levels of `< and >` characters are ignored, you can first wrap some lines you wish to render in selection blocks, which will cause only those lines to be rendered. Then however if you place one large selection block around your entire script, now in effect your entire script will be rendered again, with the ability to simply remove the selection tokens from the beginning and end of the document to reenable the previously configured render selection blocks.
+
+## Sharing voices
+The STAR client package comes shipped with a couple of voice providers, making it easy to allow your computer's voices to be used by anybody else using the same coagulator as you are.
+
+In the windows package, these are balcony.exe and sammy.exe. For MacOS voice sharing, currently you will need to download the STAR source code and run the macsay.py provider in your mac's terminal.
+
+Each provider has a --configure command line option. So if you run balcony.exe --configure, for example, a dialog will appear allowing you to:
+1. Add, edit and remove hosts. A provider can connect to multiple coagulators at once!
+2. Disable certain voices from being shared.
+3. Cause any voice to be shared with a different name or alias than the default.
+
+You can then run balcony.exe or sam.exe standalone and the voices will be shared using the set configuration. It's common to create shortcuts to the providers and place them in the shell:startup location accessible from the run dialog, causing voices to be shared to a list of coagulators on system boot.
 
 ## Change log
 ### Revision 3

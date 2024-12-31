@@ -17,6 +17,8 @@ The task of these components is to translate text to speech depending on the voi
 ### Coagulation server
 This component is what ties everything together. A coagulator is run, and then speech providers connect to it and send a list of voices it can synthesize. The coagulator will take note of voice names to provider clients. When a user client connects to the coagulator, it can therefor send a long speech script to the coagulator which is then parsed, whereupon requests per voice are sent on to the various speech providers that can synthesize each voices. The coagulator then acts as a relay, sending the audio data from each provider back to the user client that initially asked for it.
 
+In more simple terms it's just the server that lets providers from anywhere communicate with user clients. There is [separate coagulator documentation](https://github.com/samtupy/star/blob/main/coagulator/readme.md) here if you want to learn how to host one yourself.
+
 ## Running from Source
 Currently the client works with python 3.12 windows 64 bit, however it should work on other platforms soon once a few minor dependancy issues are resolved.
 
@@ -24,7 +26,7 @@ Pretty much this entire project is written in python sans a couple of providers 
 1. After opening a terminal window up to this repository's directory, create a python virtual environment to make an isolated workspace for all modules this project uses: `python -m venv venv`
 2. Activate the virtual environment you just created: on windows `venv\scripts\activate`, on MacOS `source venv/bin/activate`, or on Linux `venv/bin/activate`
 3. Install requirements: `pip install -r requirements.txt`
-4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory.
+4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory. As of Dec 09 2024 an update to balcon causes an extra charset detection dll to be required, so if you want you can use the [balcon.exe used in STAR's CI actions](https://samtupy.com/star_ci/balcon.exe) instead.
 5. If you want to use the sammy provider, you need the sam.exe synthesizer. You can just download the one the build workflow uses [from here](https://samtupy.com/star_ci/sam.exe) if you like, or else I built that from [this repository](https://github.com/s-macke/SAM) with the SConstruct line `Program("sam", Glob("src/*.c"), CPPFLAGS = ["/Os"])` if you'd rather build it yourself. Regardless, you'll want to place sam.exe in the provider folder.
 
 From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do. You'll likely want to configure the coagulator/provider first, and so everything accept the user client supports a --configure command line argument which brings up a configuration interface, and/or --config filename.ini to load configuration from a specified path (useful for things like unix daemons).

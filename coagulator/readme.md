@@ -7,7 +7,7 @@ The coagulator can run on windows, MacOS or Linux provided that the host machine
 
 ## Command line arguments
 The coagulator processes a couple of command line arguments that are very useful to know about.
-* --configure: This opens a terminal based configuration interface where it is possible to add and modify/delete users, as well as to alter the host and port that the server binds to.
+* --configure: This opens a terminal based configuration interface where it is possible to add and modify/delete users, as well as to alter the host and port that the server binds to. At this time you'll need to restart the coagulator after making any config changes here.
 * --config /path/to/config.ini: This allows you to specify a custom location for the configuration file, by default it is just coagulator.ini along side coagulator.py/.exe.
 * --authless: This temporarily disables all password authentication on the coagulator, use with care! Coagulators with no password authentication could lead to anything from DDoS attacks to voices being used nonconsentually and/or in ways that violates their license agreements, including but not limited to wasted quotas for cloud voices if someone finds your coagulator and spams it.
 * --host `<host>`, --port `<port>`: Allows you to temporarily change the host and port that the coagulator binds to. For a more permanent change, use the --configure option instead.
@@ -40,3 +40,11 @@ On linux, a systemd .service file is provided if you want the coagulator you are
 3. Configure the coagulator with the same command as usual.
 4. Run `sudo systemd start starserver` to bring the server up, `sudo systemd stop starserver` to bring the server down, `sudo systemctl enable starserver` to make the server auto start on boot, or `sudo systemctl disable starserver` to prevent the auto start.
 
+## Sharing your coagulator's URI and other tips
+Both the user client and STAR providers connect to your coagulator using standardized URI syntax with the WebSocket (ws) scheme. That is, a valid URI might look like ws://username:password@address:port.
+
+So if your server has the IP address 2.3.4.5 and you host a coagulator on the default port (7774) with a user named 'joe' who has a password of 'DoNotHackMeBro', you could send joe the URI ws://joe:DoNotHackMeBro@2.3.4.5:7774 which they can just paste into the host field in their client or provider configuration.
+
+It might be best to avoid passwords with special characters for now, as such characters need to be URL encoded making them more difficult to type in URI form. For example if a password has an @ character in it such as 'my_password@secure', the uri would look like ws://user:my_password%40secure@host:port, otherwise as you can imagine the system would get confused and think that the word secure after the first @ character was part of the address!
+
+Please be aware that as this application does not protect anything particularly sensative, passwords are stored in plain-text in the coagulator's configuration file at this time. As such, avoid the usage of passwords that are similar to those that might be used elsewhere for more sensative services.
