@@ -26,11 +26,12 @@ jobs:
         name: STAR_win64
         path: 'dist/STAR'
   publish_release:
-    needs: windows_build
+    needs: ["windows_build"]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    steps:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v4
     - name: make_assets
