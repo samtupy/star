@@ -43,6 +43,8 @@ jobs:
     - uses: ghalactic/github-release-from-tag@v5
       with:
         draft: "true"
+        checksumGenerateAssets: "false"
         assets: |
           - path: STAR_win64.zip
+            name: STAR_win64_${{github.ref_name}}.zip
 
