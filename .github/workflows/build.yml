@@ -42,7 +42,6 @@ jobs:
         cd ..
     - uses: ghalactic/github-release-from-tag@v5
       with:
-        draft: "true"
         checksumGenerateAssets: "false"
         assets: |
           - path: STAR_win64.zip

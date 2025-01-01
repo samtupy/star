@@ -92,6 +92,17 @@ The next great feature supported in these scripts is voice aliases or character 
 
 The above example shows the usage of comments to denote the characters from the scenes, and shows how by defining the character alias rs5 for example, we can then avoid needing to type RoboSoft Five over and over again in the script which can be a huge speed boost. Any whitespace is trimmed from the aliases so that space between the equals sign is optional, and an alias defined anywhere in your script will effect the entire document E. you can safely place your aliases at the bottom of your script if you like. Aliases can include default rate and pitch parameters, such as `|MadMike = Microsoft Mike<p=9 r=3>` for example. If a script line then contains any parameters, that line will override the defaults in the voice alias.
 
+### Balabolka / balcon tags
+Though they will not be fully explained here as Balabolka provides it's own documentation, it is worth noting that it is possible to use the typical voice tags supported by the Balabolka program, with the exception of the {{Audio=}} tag. For example,
+
+`Sam: Hi there, that's cool! {{Voice=mary}} yeah it really is!`
+
+Would cause the voice to switch from Sam to mary half way through synthesis.
+
+If you really want to get the {{Audio=}} tag working with the balcony provider, you must [download balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the libsamplerate.dll file alongside balcon.exe. Be sure you really want to do this though particularly if you want to share voices with others, as it provides access to any audio file on your system given a path! For example, if the audio tag is enabled, the following line would embed the specified sounds into the generated stream.
+
+`Sam: Hi there, {{Audio=C:\Windows\Media\Chord.wav}} that's cool! {{Voice=mary}} yeah it really is! {{Audio=C:\windows\media\notify.wav}}`
+
 ### Selective rendering
 The final supported feature in the script format allows for selective rendering. Often, it might happen that you might want to simply tweak one or 2 lines, or continuously add new voice clips to your audio production as you are sound designing. While you could just paste only the part of your script in the field you wish to render, this would mess up any counters which would allow you to account for what order the voice clips should play in. Instead, you can wrap groups of lines in `< and >` characters to select only the lines contained within to render, like this.
 
@@ -128,7 +139,7 @@ You can then run balcony.exe or sam.exe standalone and the voices will be shared
 ## Change log
 ### Revision 3
 This is a major update to STAR which includes a complete user client rewrite and consequently the introduction of several useful features.
-* The user client was completely rewritten from scratch in python and WX Widgets, meaning that though feedback must still be gathered to make it look right, the user client can now be used without a screen reader!
+* The user client was completely rewritten from scratch in python and WX Widgets, meaning that though feedback must still be gathered to make it look right or even to insure that controls are visible at all, the user client should soon  be able to be used without a screen reader within a couple of revisions!
 * Due to the script text field being a true richtext control, the previewing hotkeys were changed to control+alt+up, down, and space rather than just control. This was forced on us because NVDA at least seems to always speak when control+up and down are pressed on a text field regardless of any application code.
 * It is now possible to press ctrl+alt+enter on any valid speech line in the script to begin auto previewing the entire script up to it's end or the next error.
 * You can press alt+backspace anywhere in the main screen to pause and resume any playing speech, thus the stop currently playing speech button was removed from the interface.
@@ -137,7 +148,9 @@ This is a major update to STAR which includes a complete user client rewrite and
 * Now that the options dialog exists, the output device list has been moved to that dialog.
 * It is now possible to consolidate the entire script into one audio file! Next to the script field, there is an output subdirectory or consolidated filename field. If you set thhis to a filename such as output.wav instead of a folder name such as output, now a single output.wav file will be created containing all voice clips seperated by a configurable amount of silence.
 * The synthesis caching is much improved. Now if you preview a script before rendering it, the render will be almost instant as the cached phrases from the synthesis will now be used while rendering. It is also possible to manually clear the audio cache in the options dialog.
+* The render progress sound was removed in favor of a real native progress bar. It sounds a bit less cool but should be visually accessible soon and is far less expensive than playing the sound.
 * There are some cool new features in the script syntax, such as selecting only certain lines to render on the minor end to being able to define character aliases per script on the very useful end!
+* Typically STAR coagulators now require authentication. To make dealing with this easier, STAR can now save previous hosts you connect to, allowing you to select between them in the options dialog.
 * Full documentation is now provided as well as automatic windows client builds on Github.
 
 ## Disclaimer

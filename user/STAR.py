@@ -57,7 +57,9 @@ class playsound:
 	def playing(self): return self.handle.is_playing if self.handle else None
 	def wait_for_finish(self):
 		#Todo: Convert to bass sync when possible.
-		while self.finish_func and self.handle and (self.handle.is_playing or self.handle.is_paused): time.sleep(0.005)
+		try:
+			while self.finish_func and self.handle and (self.handle.is_playing or self.handle.is_paused): time.sleep(0.005)
+		except BassError: return
 		if self.handle: self.finish_func(self)
 
 def is_valid_ws_uri(uri):
@@ -160,7 +162,7 @@ class remote_event(wx.PyEvent):
 		self.data = data
 
 class star_local:
-	"""This class facilitates a convenient local STAR stack for cases when no remote servers are available. When created the coagulator and some providers are run, and when destroyed the child processes are terminated."""
+	"""This class facilitates a convenient local STAR stack for cases when no remote servers are available. When the start method is called the coagulator and some providers are run, and when stop is called or the object is destroyed the child processes are terminated."""
 	def __init__(self, client):
 		self.client = client
 		self.abort = threading.Event()
@@ -168,15 +170,22 @@ class star_local:
 		provider = "balcony" if sys.platform == "win32" else "macsay" if sys.platform == "darwin" else None
 		if provider: self.processes.append([f"{provider} provider", [sys.executable, os.path.join("..", "provider", provider + ".py"), "--hosts", "ws://127.0.0.1:7774"] if not hasattr(sys, "frozen") else [provider, "--hosts", "ws://127.0.0.1:7774"], None])
 		if sys.platform == "win32": self.processes.append(["sammy provider", [sys.executable, os.path.join("..", "provider", "sammy.py"), "--hosts", "ws://127.0.0.1:7774"] if not hasattr(sys, "frozen") else ["sammy", "--hosts", "ws://127.0.0.1:7774"], None])
-		self.start()
 	def __del__(self): self.stop()
 	def start(self, silent = False):
 		self.abort.clear()
 		for p in self.processes:
-			p[2] = subprocess.Popen(p[1], creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+			try: p[2] = subprocess.Popen(p[1], creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+			except Exception as e: return self.fail(f"Unable to start {p[0]}, {e}")
 		threading.Thread(target = self.monitor, daemon = True).start()
 		atexit.register(self.stop)
 		return True
+	def fail(self, message):
+		wx.CallAfter(wx.MessageDialog(self.client, message, "Local STAR setup Error", wx.OK).ShowModal)
+		wx.CallAfter(self.client.Close)
+		self.stop()
+		config["host"] = ""
+		config.write() # insure the user doesn't get stuck in a loop of coagulation setup errors.
+		return False
 	def monitor(self):
 		while not self.abort.wait(1):
 			for p in self.processes:
@@ -367,16 +376,22 @@ class star_client(wx.Frame):
 		if "host" in config and config["host"] != "" and not self.configuration.validate():
 			r = self.on_options()
 			if not r: return wx.Exit()
-		self.check_local()
-		self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "") if not self.local else "ws://127.0.0.1:7774"], daemon = True)
-		self.connection_thread.start()
+		if self.check_local():
+			self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "") if not self.local else "ws://127.0.0.1:7774"], daemon = True)
+			self.connection_thread.start()
+		else: self.connection_thread = None
 	def check_local(self):
-		"""If the host is 'local', set up a star_local object. Otherwise, destroy it thus terminating the child coagulator and providers."""
-		if config.get("host", "") == "local": self.local = star_local(self)
+		"""If the host is 'local', set up a star_local object. Otherwise, destroy it thus terminating the child coagulator and providers. Returns false if the connection thread should not be started because the local stack failed to be set up."""
+		if config.get("host", "") == "local":
+			self.local = star_local(self)
+			if not self.local.start():
+				self.local = None
+				return False
 		else:
 			if hasattr(self, "local") and self.local: self.local.stop()
 			self.local = None
 		self.run_local_btn.Enabled = config.get("host", "") != "local"
+		return True
 	def on_copy_voicename(self, evt):
 		"""Copies the currently focused voice name to the clipboard, called when ctrl+c is pressed on a voice name in the voices list."""
 		voice = self.voices_list.FocusedItem
@@ -601,7 +616,6 @@ class star_client(wx.Frame):
 			self.connection_thread.join()
 			self.connection_thread = None
 		self.initial_connection = False
-		self.check_local()
 		self.speech_requests = {}
 		self.speech_requests_text = {}
 		self.voices = {}
@@ -611,7 +625,7 @@ class star_client(wx.Frame):
 		self.connecting_panel.Show()
 		if label_change: self.connecting_label.SetFocus()
 		self.main_panel.Hide()
-		if full:
+		if full and self.check_local():
 			self.connection_thread = threading.Thread(target = self.connect, args = [config.get("host", "") if not self.local else "ws://127.0.0.1:7774"], daemon = True)
 			self.connection_thread.start()
 	def connect(self, host):
