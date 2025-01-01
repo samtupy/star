@@ -1,7 +1,6 @@
-## WARNING!
-This repository is under heavy development as I work on polishing this project. Until this notice disappears, please expect documentation to be incomplete/out of date and understand that you may find this program confusing to build / use and I will likely provide little support until documentation and polishing is complete.
-
 # Speech To Audio Relay (STAR)
+[Download windows client](https://github.com/samtupy/star/releases/latest/download/STAR_win64_v3.zip)
+
 This is a set of components intended to ease the creation of audio productions that involve the synthesis of text to speech to audio, particularly where many voices that might be contained on any number of different computers or devices are involved.
 
 ## How it Works
