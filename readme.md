@@ -14,7 +14,7 @@ The frontend to this application involves the user client. This application is r
 The task of these components is to translate text to speech depending on the voices available on a given system. A provider can run anywhere TTS voices are available, and some providers might be platform-agnostic as they might synthesize tts from cloud providers like Google or Amazon.
 
 ### Coagulation server
-This component is what ties everything together. A coagulator is run, and then speech providers connect to it and send a list of voices it can synthesize. The coagulator will take note of voice names to provider clients. When a user client connects to the coagulator, it can therefor send a long speech script to the coagulator which is then parsed, whereupon requests per voice are sent on to the various speech providers that can synthesize each voices. The coagulator then acts as a relay, sending the audio data from each provider back to the user client that initially asked for it.
+This component is what ties everything together. A coagulator is run, and then speech providers connect to it and send a list of voices it can synthesize. The coagulator will take note of voice names to provider clients. When a user client connects to the coagulator, it can therefor send a long speech script to the coagulator which is then parsed, whereupon requests per voice are sent on to the various speech providers that can synthesize each voice. The coagulator then acts as a relay, sending the audio data from each provider back to the user client that initially asked for it.
 
 In more simple terms it's just the server that lets providers from anywhere communicate with user clients. There is [separate coagulator documentation](https://github.com/samtupy/star/blob/main/coagulator/readme.md) here if you want to learn how to host one yourself.
 
@@ -23,9 +23,9 @@ Currently the client works with python 3.12 windows 64 bit, however it should wo
 
 Pretty much this entire project is written in python sans a couple of providers such as the one for the NVGT fallback RSynth voice. The recommended first-time instructions are as follows:
 1. After opening a terminal window up to this repository's directory, create a python virtual environment to make an isolated workspace for all modules this project uses: `python -m venv venv`
-2. Activate the virtual environment you just created: on windows `venv\scripts\activate`, on MacOS `source venv/bin/activate`, or on Linux `venv/bin/activate`
+2. Activate the virtual environment you just created: on windows `venv\scripts\activate`, or on MacOS/Linux `source venv/bin/activate`
 3. Install requirements: `pip install -r requirements.txt`
-4. If you wish to run the balcony provider, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory. As of Dec 09 2024 an update to balcon causes an extra charset detection component (chsdet.dll) to also be required, so if you want to avoid that you can use the [balcon.exe used in STAR's CI actions](https://samtupy.com/star_ci/balcon.exe) instead. WARNING! If you place libsamplerate.dll from the balcon distrobution alongside balcon.exe, balcon's `{{Audio=path}}` tag will begin working, meaning that anyone sharing their voice might also be sharing any audio file on their system that somebody knows the path to (a HUGE security risk)! Only put this DLL in place for local setups or hwen you are absolutely sure everyone on your network can be trusted. The dll is not included in the public STAR distrobution.
+4. If you wish to run the balcony provider on windows, you'll want to download [balcon.zip](https://www.cross-plus-a.com/balcon.zip) and place the contained balcon.exe in the provider directory. As of Dec 09 2024 an update to balcon causes an extra charset detection component (chsdet.dll) to also be required, so if you want to avoid that you can use the [balcon.exe used in STAR's CI actions](https://samtupy.com/star_ci/balcon.exe) instead. WARNING! If you place libsamplerate.dll from the balcon distrobution alongside balcon.exe, balcon's `{{Audio=path}}` tag will begin working, meaning that anyone sharing their voice might also be sharing any audio file on their system that somebody knows the path to (a HUGE security risk)! Only put this DLL in place for local setups or hwen you are absolutely sure everyone on your network can be trusted. The dll is not included in the public STAR distrobution.
 5. If you want to use the sammy provider, you need the sam.exe synthesizer. You can just download the one the build workflow uses [from here](https://samtupy.com/star_ci/sam.exe) if you like, or else I built that from [this repository](https://github.com/s-macke/SAM) with the SConstruct line `Program("sam", Glob("src/*.c"), CPPFLAGS = ["/Os"])` if you'd rather build it yourself. Regardless, you'll want to place sam.exe in the provider folder.
 
 From this point you can cd to the coagulator directory and run coagulator.py, cd to the provider directory and run balcony.py or macsay.py, or cd to the user directory and run STAR.py based on what you want to do. You'll likely want to configure the coagulator/provider first, and so everything accept the user client supports a --configure command line argument which brings up a configuration interface, and/or --config filename.ini to load configuration from a specified path (useful for things like unix daemons).
@@ -43,11 +43,15 @@ This project uses web sockets for communication. The coagulator is what acts as 
 
 ### Writing a user client
 For a user client to communicate with the coagulator, it should send a payload in the form:
+
 ```{"user": revision, "request": ["voice1: line1", "voice2: line2", "someone<r=-5>": "etc"]}```
+
 If the text key is omited, the coagulator will return a list of full voice names available in the form `{"voices": ["voice1", "voice2"]}`
 
 Otherwise, the coagulator will start sending back binary payloads in the form:
+
 ```2 byte little endian request ID length, request ID, audio data```
+
 Until all lines passed have been synthesized.
 
 While the coagulator does act as a direct relay and thus providers could send data in any format it wants, what's written here is the standard.
@@ -58,11 +62,14 @@ The speech key is important. It contains an ID used to track the order of synthe
 The recommended way to write a STAR provider is by using the existing framework called provider.py within the provider directory. Several example providers already exist which not only connect most popular voice engines to STAR, but which can also be used as examples of creating your own provider.
 
 If you have a command line program which can receive text as input and which produces wav data as output, a provider can be written in just a couple lines of code. The following is a 2 line provider which wraps the sam.exe synthesizer, for example.
+
 ```Python
 from provider import star_provider
 star_provider("sammy", voices = "microsam", synthesis_process = ["sam", "-wav", "{filename}", "{text}"], synthesis_process_rate = ["-speed", "{rate}"], synthesis_process_pitch = ["-pitch", "{pitch}"])
 ```
+
 The constructor for the STAR provider class is as follows:
+
 `def __init__(self, provider_basename = os.path.splitext(sys.argv[0])[0], handle_argv = True, run_immedietly = True, voices = None, synthesis_process = None, synthesis_process_rate = None, synthesis_process_pitch = None)`
 
 Arguments:
@@ -81,17 +88,25 @@ You might be interested in overriding the following methods in a subclass of the
 Usually, it's best to inherit from the provided python provider class rather than doing this from scratch, but below are the instructions nevertheless which can be useful for example if you wish to write a provider that runs on an embedded device or in any other environment where modern python is not available.
 
 When a speech provider first connects to a coagulator, it should send a packet in the form:
+
 ```{"provider": revision, "voices": ["voice1", "voice2", "etc"]}```
+
 before continuously listening for packets in the form:
+
 ```{"voice": "voicename", "text": "text to speak", "id": ID}```
+
 and responding each time with binary packets such as:
+
 ```2 byte little endian ID length, ID, audio data```
+
 where ID is the same as that received in the voice packet's id key.
 
 Voice packets might contain extra parameters like rate and pitch, but your providers should be set up to not require these.
 
 If a request fails to synthesize or if you wish to pipe status messages back to the client that initiated a speech request, you can send packets such as:
+
 ```{"provider": revision, "id": request_ID, "status": "status message"}```
+
 Another special key, "abort", can be sent in this payload with a value of True to indicate that this speech request has failed and thus that no audio data will be forthcoming.
 
 ## Disclaimer
