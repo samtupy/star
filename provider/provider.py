@@ -140,7 +140,7 @@ class star_provider:
 			id = k.replace("_", " ").replace("-", " ").replace("(", " ").replace(")", " ").replace(":", " ").replace(".", "").replace("   ", " ").replace("  ", " ").strip()
 			conf = self.config["voices"][id] if "voices" in self.config and id in self.config["voices"] else {}
 			self.voices[id] = raw_voices[k]
-			self.voices[id].update({"id": id, "full_name": k, "label": conf["alias"] if "alias" in conf else id, "enabled": conf.as_bool("enabled") if "enabled" in conf else True})
+			self.voices[id].update({"id": id, "full_name": self.voices[id]["full_name"] if "full_name" in self.voices[id] else k, "label": conf["alias"] if "alias" in conf else id, "enabled": conf.as_bool("enabled") if "enabled" in conf else True})
 			if "alias" in conf: self.voices[id]["alias"] = conf["alias"]
 	async def synthesize(self, voice, text, rate = None, pitch = None):
 		"""Synthesizes some text, should return a bytes object containing the audio data (usually a playable wav file), or a string with an error message. The default implementation uses the executable and arguments defined by self.synthesis_process, allowing any providers that use external applications to be implemented almost instantly!"""

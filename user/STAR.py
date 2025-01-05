@@ -603,6 +603,7 @@ class star_client(wx.Frame):
 		if self.websocket: self.websocket.close()
 		if self.local: self.local.stop()
 		self.local = None
+		self.connection_abort.set()
 		evt.Skip()
 	def on_toggle_speaking(self, evt):
 		"""Called when the user presses alt+backspace, pauses or resumes any currently playing speech."""
