@@ -30,7 +30,7 @@ The controls on this screen are as follows:
 * output subdirectory or consolidated filename (alt+d): Here, you can choose specifically where the output of the next render will be placed within the global render output directory. If it's left empty, new .wav files will be added to the root of the globally configured output directory that is specified in the options dialog. Otherwise a subdirectory with the name specified in this field will be created to store new output. If the contents of this field end with a .wav (or even .mp3 if you have ffmpeg on your computer), all speech clips will be consolidated into the one filename specified instead of as individual .wav files.
 * render to disc (alt+r): This button begins the process of synthesizing and rendering any script text that's been provided. It's label will switch to "Cancel" when rendering is in progress.
 * options (alt+o): Open the options dialog.
-* exit (alt+e): Exit the program, can also be done with alt+f4 or escape. When using the run locally option it's always best to exit cleanly rather than killing the process in task manager or ctrl+c in the terminal etc, otherwise the local coagulator and providers launched by the client won't be terminated properly and you'll then need to kill them yourself.
+* exit (alt+x): Exit the program, can also be done with alt+f4 or escape. When using the run locally option it's always best to exit cleanly rather than killing the process in task manager or ctrl+c in the terminal etc, otherwise the local coagulator and providers launched by the client won't be terminated properly and you'll then need to kill them yourself.
 
 You can also press alt+backspace to pause or resume any playing speech from any place in the main screen.
 

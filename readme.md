@@ -52,6 +52,14 @@ Otherwise, the coagulator will start sending back binary payloads in the form:
 
 ```2 byte little endian request ID length, request ID, audio data```
 
+Or,
+
+```2 byte little endian metadata length, metadata, audio data```
+
+where metadata is a json payload in the form:
+
+```{"id": ID, "extension": "mp3"}```
+
 Until all lines passed have been synthesized.
 
 While the coagulator does act as a direct relay and thus providers could send data in any format it wants, what's written here is the standard.
@@ -61,7 +69,7 @@ The speech key is important. It contains an ID used to track the order of synthe
 ### Writing a speech provider in python
 The recommended way to write a STAR provider is by using the existing framework called provider.py within the provider directory. Several example providers already exist which not only connect most popular voice engines to STAR, but which can also be used as examples of creating your own provider.
 
-If you have a command line program which can receive text as input and which produces wav data as output, a provider can be written in just a couple lines of code. The following is a 2 line provider which wraps the sam.exe synthesizer, for example.
+If you have a command line program which can receive text as input and which produces audio data as output, a provider can be written in just a couple lines of code. The following is a 2 line provider which wraps the sam.exe synthesizer, for example.
 
 ```Python
 from provider import star_provider
@@ -70,7 +78,7 @@ star_provider("sammy", voices = "microsam", synthesis_process = ["sam", "-wav", 
 
 The constructor for the STAR provider class is as follows:
 
-`def __init__(self, provider_basename = os.path.splitext(sys.argv[0])[0], handle_argv = True, run_immedietly = True, voices = None, synthesis_process = None, synthesis_process_rate = None, synthesis_process_pitch = None)`
+`def __init__(self, provider_basename = os.path.splitext(sys.argv[0])[0], handle_argv = True, run_immedietly = True, voices = None, synthesis_process = None, synthesis_process_rate = None, synthesis_process_pitch = None, synthesis_default_rate = None, synthesis_default_pitch = None, synthesis_audio_extension = None)`
 
 Arguments:
 * provider_basename: This is used to name the provider's configuration file, show error messages, or anything else where a generic name string can be useful. Should be a valid file basename.
@@ -79,6 +87,8 @@ Arguments:
 * voices: An initial list of voices you provide. For more dynamic providers where the list could change, it's best to instead override the provider's get_voices method.
 * synthesis_process: If your provider is simply connecting to a command line application, this argument controls the process that is to be executed. It should be a list, with one part of the command per item. The first item is usually a process filename, with consecutive items being arguments that are passed to the given filename. The format specifiers {filename}, {text}, {rate}, {pitch} can be used to insert the dynamic bits of the argument content however it's best to use the synthesis_process_rate and synthesis_process_pitch provider arguments to handle the speech parameters instead of bundling them all in the synthesis_process argument directly.
 * synthesis_process_rate, synthesis_process_pitch: Additions to the synthesis_process argument, these arguments are only appended to the final command that is to be executed only if the rate and/or pitch are actually present in the request. This might be important because with most command line applications, not specifying a rate or pitch argument at all means using the default, therefor the provider's default value of 0 for these parameters if they are not present might not be optimal for calling your synthesis process. Just like above you use {rate} or {pitch} to actually insert that value into the argument string, and you should pass arguments as a python list.
+* synthesis_default_rate, synthesis_default_pitch: default values passed to the synthesize function when rate or pitch is omitted in an individual speech request. This is useful in some sanarios where the default rate or pitch of a voice is indeterminet or based on some global system setting, meaning that the synthesis could sound different for each person providing such a voice if a default parameter value is not enforced.
+* synthesis_audio_extension: This hint is eventually passed along to user clients upon synthesis, telling them what file extension to save speech clips as that have been received by your provider. Should be mp3, ogg, opus etc. A value of None (the default) is the same as wav.
 
 You might be interested in overriding the following methods in a subclass of the star_provider object if you need more advanced functionality than what the base object provides:
 * async def synthesize(self, voice, text, rate = None, pitch = None): This method can return a bytes like object containing synthesized wave data, or an error string if synthesis was not successful. The voice argument is garenteed to be set to one of the voices you told the provider about. Beware the async nature of this function.
@@ -89,7 +99,7 @@ Usually, it's best to inherit from the provided python provider class rather tha
 
 When a speech provider first connects to a coagulator, it should send a packet in the form:
 
-```{"provider": revision, "voices": ["voice1", "voice2", "etc"]}```
+```{"provider": revision, "provider_name": "balcony" or "macsay" or "your_basename_here", "voices": ["voice1", "voice2", "etc"]}```
 
 before continuously listening for packets in the form:
 
@@ -100,6 +110,14 @@ and responding each time with binary packets such as:
 ```2 byte little endian ID length, ID, audio data```
 
 where ID is the same as that received in the voice packet's id key.
+
+Or,
+
+```2 byte little endian metadata length, metadata, audio data```
+
+where metadata is a json payload in the form:
+
+```{"id": ID, "extension": "mp3"}```
 
 Voice packets might contain extra parameters like rate and pitch, but your providers should be set up to not require these.
 

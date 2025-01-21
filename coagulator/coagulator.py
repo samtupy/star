@@ -82,11 +82,13 @@ async def handle_speech_request(client, request, id=""):
 async def on_message(ws, client, message):
 	"""Handles incoming WebSocket messages."""
 	if type(message) == bytes:
-		req_len = int.from_bytes(message[:2], "little")
-		req = message[2:req_len+2].decode()
-		if req in g.speech_requests: 
-			await g.speech_requests[req][0]["ws"].send(message)
-			del g.speech_requests[req]
+		meta_len = int.from_bytes(message[:2], "little")
+		meta = message[2:meta_len+2].decode()
+		if meta.startswith("{"): meta = json.loads(meta)
+		else: meta = {"id": meta}
+		if meta["id"] in g.speech_requests: 
+			await g.speech_requests[meta["id"]][0]["ws"].send(message)
+			del g.speech_requests[meta["id"]]
 		return
 	try:
 		msg = json.loads(message)

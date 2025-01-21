@@ -101,7 +101,7 @@ class star_provider_configurator(wx.Dialog):
 
 class star_provider:
 	"""A base class that can be used to implement any STAR provider able to be written in Python3. It abstracts all communication with coagulators, as much of the async stuff as possible, filtering voice names and more."""
-	def __init__(self, provider_basename = os.path.splitext(sys.argv[0])[0], handle_argv = True, run_immedietly = True, voices = None, synthesis_process = None, synthesis_process_rate = None, synthesis_process_pitch = None):
+	def __init__(self, provider_basename = os.path.splitext(sys.argv[0])[0], handle_argv = True, run_immedietly = True, voices = None, synthesis_process = None, synthesis_process_rate = None, synthesis_process_pitch = None, synthesis_default_rate = None, synthesis_default_pitch = None, synthesis_audio_extension = None):
 		"""The provider_basename argument should be set to a simple strings such as balcony or pyttsx. Set handle_argv to False if you don't wish for the default CLI interface. If you really wish to configure this object further than the constructor allows before running the provider, set run_immedietly to False. The default implementation makes it easy to implement executable based providers with  the synthesis_process arguments."""
 		self.config_filename = f"{provider_basename}.ini"
 		self.basename = provider_basename
@@ -109,14 +109,15 @@ class star_provider:
 		if synthesis_process: self.synthesis_process = synthesis_process
 		if synthesis_process_rate: self.synthesis_process_rate = synthesis_process_rate
 		if synthesis_process_pitch: self.synthesis_process_pitch = synthesis_process_pitch
+		self.synthesis_default_rate = synthesis_default_rate
+		self.synthesis_default_pitch = synthesis_default_pitch
+		self.synthesis_audio_extension = synthesis_audio_extension
 		if handle_argv: self.handle_argv()
 		self.config = configobj.ConfigObj(self.config_filename)
 		if not hasattr(self, "hosts"): self.hosts = self.config.get("hosts", ["ws://localhost:7774"])
 		if type(self.hosts) == str: self.hosts = [self.hosts]
 		self.ready_voices()
-		if not run_immedietly: return
-		if hasattr(self, "do_configuration_interface"): self.configuration_interface()
-		else: self.run()
+		if run_immedietly: self.run()
 	def handle_argv(self):
 		p = argparse.ArgumentParser(argument_default = argparse.SUPPRESS)
 		p.add_argument("--config", nargs = "?", const = self.config_filename)
@@ -143,10 +144,10 @@ class star_provider:
 			self.voices[id].update({"id": id, "full_name": self.voices[id]["full_name"] if "full_name" in self.voices[id] else k, "label": conf["alias"] if "alias" in conf else id, "enabled": conf.as_bool("enabled") if "enabled" in conf else True})
 			if "alias" in conf: self.voices[id]["alias"] = conf["alias"]
 	async def synthesize(self, voice, text, rate = None, pitch = None):
-		"""Synthesizes some text, should return a bytes object containing the audio data (usually a playable wav file), or a string with an error message. The default implementation uses the executable and arguments defined by self.synthesis_process, allowing any providers that use external applications to be implemented almost instantly!"""
+		"""Synthesizes some text, should return a bytes object containing the audio data (usually a playable wav file or other common audio format), otherwise a string with an error message. The default implementation uses the executable and arguments defined by self.synthesis_process, allowing any providers that use external applications to be implemented almost instantly!"""
 		if not hasattr(self, "synthesis_process"): return f"no method provided for synthesis of {voice}"
 		try:
-			with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
+			with tempfile.NamedTemporaryFile(suffix=f".{self.synthesis_audio_extension if self.synthesis_audio_extension else 'wav'}", delete=False) as fp:
 				fp.close()
 			args = []
 			for arg in self.synthesis_process: args.append(arg.format(voice = voice, text = text, rate = rate if rate is not None else 0, pitch = pitch if pitch is not None else 0, filename = fp.name))
@@ -156,14 +157,15 @@ class star_provider:
 				for arg in self.synthesis_process_pitch: args.append(arg.format(pitch = pitch))
 			process = await asyncio.create_subprocess_exec(*args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
 			await process.communicate()
-			wave_data = b""
-			with open(fp.name, "rb") as f: wave_data = f.read()
+			audio_data = b""
+			with open(fp.name, "rb") as f: audio_data = f.read()
 			os.unlink(fp.name)
-			return wave_data
+			return audio_data
 		except Exception as e:
 			return str(e)
 	async def connect(self, host):
 		should_exit = False
+		last_exception = ""
 		while not should_exit:
 			try:
 				async with websockets.asyncio.client.connect(host, max_size = None, max_queue = 4096) as websocket:
@@ -180,12 +182,15 @@ class star_provider:
 				print("shutting down")
 				should_exit = True
 			except Exception as e:
-				traceback.print_exc()
-				print(f"reconnecting to {host}... {e}")
+				exc = str(e)
+				if exc != last_exception:
+					traceback.print_exc()
+					print(f"reconnecting to {host}... {e}")
+				last_exception = exc
 				time.sleep(3)
 	async def send_voices(self, websocket):
 		"""Send a list of voice names to the server."""
-		packet = {"provider": PROVIDER_REVISION, "voices": []}
+		packet = {"provider": PROVIDER_REVISION, "provider_name": self.basename, "voices": []}
 		for v in self.voices:
 			if not self.voices[v]["enabled"]: continue
 			packet["voices"].append(self.voices[v]["label"])
@@ -197,14 +202,18 @@ class star_provider:
 			if "voice" in event and "text" in event:
 				synthesis_result = None
 				if not event["voice"] in self.voices: synthesis_result = f"cannot find voice {event['voice']}"
-				else: synthesis_result = await self.synthesize(self.voices[event["voice"]]["full_name"], event["text"], event["rate"] if "rate" in event else None, event["pitch"] if "pitch" in event else None)
+				else: synthesis_result = await self.synthesize(self.voices[event["voice"]]["full_name"], event["text"], event["rate"] if "rate" in event else self.synthesis_default_rate, event["pitch"] if "pitch" in event else self.synthesis_default_pitch)
+				meta = {"id": event["id"]}
+				if self.synthesis_audio_extension: meta["extension"] = self.synthesis_audio_extension
+				meta = json.dumps(meta)
 				if type(synthesis_result) == str: await websocket.send(json.dumps({"provider": PROVIDER_REVISION, "id": event["id"], "status": synthesis_result, "abort": True}))
-				else: await websocket.send(len(event["id"]).to_bytes(2, "little") + event["id"].encode() + synthesis_result)
+				else: await websocket.send(len(meta).to_bytes(2, "little") + meta.encode() + synthesis_result)
 		except Exception as e:
 			await websocket.send(json.dumps({"provider": PROVIDER_REVISION, "id": event["id"], "status": f"exception during synthesis {e}", "abort": True}))
 	async def async_main(self):
 		await asyncio.gather(*[self.connect(host) for host in self.hosts])
 	def run(self):
+		if hasattr(self, "do_configuration_interface"): return self.configuration_interface()
 		while True:
 			try:
 				asyncio.run(self.async_main())
