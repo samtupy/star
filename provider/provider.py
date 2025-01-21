@@ -64,6 +64,7 @@ class star_provider_configurator(wx.Dialog):
 		wx.StaticText(self, -1, "&Voices")
 		self.voices_list = voices_list(self, style = wx.LC_SINGLE_SEL | wx.LC_REPORT | wx.LC_VIRTUAL)
 		self.voices_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_edit_voice)
+		provider.add_configuration_options(self)
 		self.hosts_list.Focus(0)
 		self.hosts_list.SetFocus()
 	def host_dlg(self, value = ""):
@@ -97,6 +98,7 @@ class star_provider_configurator(wx.Dialog):
 				if not "voices" in c: c["voices"] = {}
 				c["voices"][voice["id"]] = {"alias": voice["alias"] if "alias" in voice else "", "enabled": voice["enabled"]}
 			elif "voices" in c and voice["id"] in c["voices"]: del(c["voices"][voice["id"]])
+		self.provider.write_configuration_options(self, c)
 		c.write()
 
 class star_provider:
@@ -116,6 +118,7 @@ class star_provider:
 		self.config = configobj.ConfigObj(self.config_filename)
 		if not hasattr(self, "hosts"): self.hosts = self.config.get("hosts", ["ws://localhost:7774"])
 		if type(self.hosts) == str: self.hosts = [self.hosts]
+		self.read_configuration_options()
 		self.ready_voices()
 		if run_immedietly: self.run()
 	def handle_argv(self):
@@ -224,6 +227,12 @@ class star_provider:
 				traceback.print_exc()
 				print("reconnecting... {e}")
 				time.sleep(10)
+	def add_configuration_options(self, panel):
+		"""Override this in subclasses to add options to the GUI configurator."""
+	def read_configuration_options(self):
+		"""Override this in subclasses if needed to read custom options from the configuration file before get_voices is called for the first time."""
+	def write_configuration_options(self, panel, config):
+		"""Override this in subclasses to save any custom conffiguration options to the ini file when the user clicks the same button in the GUI configurator."""
 	def configuration_interface(self):
 		if not wx.GetApp(): app = wx.App()
 		c = star_provider_configurator(self)

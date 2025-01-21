@@ -5,12 +5,13 @@ import boto3
 from boto3 import Session
 from botocore.exceptions import BotoCoreError, ClientError
 import traceback
+import wx
 from provider import star_provider
 
 class polly(star_provider):
 	def __init__(self):
 		self.language_codes = ["en-US", "en-GB", "en-IN", "en-AU", "en-GB-WLS", "en-NZ", "en-ZA", "en-IE"]
-		self.engines = ["standard", "neural"]
+		self.engines = ["standard", "neural", "generative"]
 		self.audio_cache = {}
 		star_provider.__init__(self, synthesis_audio_extension = "mp3")
 	def get_voices(self):
@@ -47,5 +48,17 @@ class polly(star_provider):
 		response["AudioStream"].close()
 		self.audio_cache[cache_id] = audio
 		return audio
+	def add_configuration_options(self, panel):
+		self.engine_options = {}
+		for e in ["standard", "neural", "generative", "long-form"]:
+			self.engine_options[e] = wx.CheckBox(panel, label = f"Enable &{e} voices")
+			self.engine_options[e].Value = self.config.as_bool(f"engine_{e}") if f"engine_{e}" in self.config else e in ["standard", "neural"]
+	def read_configuration_options(self):
+		self.engines = []
+		for e in ["standard", "neural", "generative", "long-form"]:
+			if f"engine_{e}" in self.config and self.config.as_bool(f"engine_{e}"): self.engines.append(e)
+	def write_configuration_options(self, panel, config):
+		for e in ["standard", "neural", "generative", "long-form"]:
+			config[f"engine_{e}"] = self.engine_options[e].Value
 
 if __name__ == "__main__": polly()
