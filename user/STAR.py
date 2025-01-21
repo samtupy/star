@@ -532,7 +532,7 @@ class star_client(wx.Frame):
 			self.audiospeak(l[1], render_filename = l[0])
 	def on_render_complete(self, canceled = False):
 		"""This is called on completion or cancelation of a render, and handles any UI work involved in displaying this fact while preparing for a new render."""
-		self.rendered_items = 0
+		del(self.rendered_items)
 		self.render_total = 0
 		if not canceled:
 			title = self.render_title.Value

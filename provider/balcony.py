@@ -14,4 +14,4 @@ class balcony(star_provider):
 		return voices
 
 if __name__ == "__main__":
-	balcony("balcony", synthesis_process = [os.path.join(os.path.abspath(os.path.dirname(__file__)), "balcon"), "-n", "{voice}", "-t", "{text}", "-w", "{filename}"], synthesis_process_rate = ["-s", "{rate}"], synthesis_process_pitch = ["-p", "{pitch}"])
+	balcony("balcony", synthesis_process = [os.path.join(os.path.abspath(os.path.dirname(__file__)), "balcon"), "-n", "{voice}", "-w", "{filename}", "-t", "{text}"], synthesis_process_rate = ["-s", "{rate}"], synthesis_process_pitch = ["-p", "{pitch}"])

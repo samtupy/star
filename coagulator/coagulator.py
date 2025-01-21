@@ -118,8 +118,11 @@ async def on_message(ws, client, message):
 			await handle_speech_request(client, msg["request"], str(msg.get("id", "")))
 		elif "command" in msg:
 			if msg["command"] == "abort":
-				for req_id, req in enumerate(g.speech_requests):
-					if req[0] == websocket: await req[1].send(json.dumps({"abort": req_id}))
+				for req_id in list(g.speech_requests):
+					req = g.speech_requests[req_id]
+					if req[0]["ws"] == ws:
+						await req[1].send(json.dumps({"abort": req_id}))
+						del(g.speech_requests[req_id])
 		else:
 			await ws.send(json.dumps({"voices": list(g.voices)}))
 
@@ -276,7 +279,7 @@ async def main():
 	g.clients = {}
 	handle_args()
 	if g.do_configuration_interface: return configuration()
-	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 5)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: "users" in g.config and username in g.config["users"] and g.config["users"][username].get("password", "") == password) if not g.authless else None):
+	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 10)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: "users" in g.config and username in g.config["users"] and g.config["users"][username].get("password", "") == password) if not g.authless else None):
 		print("Coagulator up.")
 		await asyncio.get_running_loop().create_future()
 

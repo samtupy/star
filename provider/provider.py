@@ -1,11 +1,12 @@
 # This is the base provider class for STAR and implements as many common features as possible.
 
-PROVIDER_REVISION = 3
+PROVIDER_REVISION = 4
 
 import argparse
 import asyncio
 import configobj
 import json
+import multiprocessing
 import os
 import subprocess
 import sys
@@ -64,6 +65,8 @@ class star_provider_configurator(wx.Dialog):
 		wx.StaticText(self, -1, "&Voices")
 		self.voices_list = voices_list(self, style = wx.LC_SINGLE_SEL | wx.LC_REPORT | wx.LC_VIRTUAL)
 		self.voices_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_edit_voice)
+		wx.StaticText(self, -1, "Number of &concurrent requests")
+		self.concurrent_requests = wx.SpinCtrl(self, value = str(int(provider.config.get("concurrent_requests", multiprocessing.cpu_count() / 2))), min = 1, max = multiprocessing.cpu_count() * 4)
 		provider.add_configuration_options(self)
 		self.hosts_list.Focus(0)
 		self.hosts_list.SetFocus()
@@ -92,6 +95,7 @@ class star_provider_configurator(wx.Dialog):
 	def save(self):
 		c = configobj.ConfigObj(self.provider.config_filename)
 		c["hosts"] = [self.hosts_list.GetItemText(i) for i in range(self.hosts_list.GetItemCount())]
+		c["concurrent_requests"] = self.concurrent_requests.Value
 		for voice in self.provider.voices:
 			voice = self.provider.voices[voice]
 			if not voice["enabled"] or "alias" in voice and voice["alias"]:
@@ -119,6 +123,8 @@ class star_provider:
 		if not hasattr(self, "hosts"): self.hosts = self.config.get("hosts", ["ws://localhost:7774"])
 		if type(self.hosts) == str: self.hosts = [self.hosts]
 		self.read_configuration_options()
+		self.task_queue = asyncio.LifoQueue()
+		self.canceled_requests = set()
 		self.ready_voices()
 		if run_immedietly: self.run()
 	def handle_argv(self):
@@ -153,7 +159,7 @@ class star_provider:
 			with tempfile.NamedTemporaryFile(suffix=f".{self.synthesis_audio_extension if self.synthesis_audio_extension else 'wav'}", delete=False) as fp:
 				fp.close()
 			args = []
-			for arg in self.synthesis_process: args.append(arg.format(voice = voice, text = text, rate = rate if rate is not None else 0, pitch = pitch if pitch is not None else 0, filename = fp.name))
+			for arg in self.synthesis_process: args.append(arg.format(voice = voice, text = text.replace("\"", " "), rate = rate if rate is not None else 0, pitch = pitch if pitch is not None else 0, filename = fp.name))
 			if rate is not None and hasattr(self, "synthesis_process_rate"):
 				for arg in self.synthesis_process_rate: args.append(arg.format(rate = rate))
 			if pitch is not None and hasattr(self, "synthesis_process_pitch"):
@@ -178,7 +184,8 @@ class star_provider:
 						message = await websocket.recv()
 						try:
 							event = json.loads(message)
-							asyncio.create_task(self.process_remote_event(websocket, event))
+							if "abort" in event: self.canceled_requests.add(event["abort"])
+							else: await self.task_queue.put((websocket, event))
 						except json.JSONDecodeError:
 							print("Received an invalid JSON message:", message)
 			except KeyboardInterrupt:
@@ -187,7 +194,7 @@ class star_provider:
 			except Exception as e:
 				exc = str(e)
 				if exc != last_exception:
-					traceback.print_exc()
+					if not isinstance(e, ConnectionRefusedError): traceback.print_exc()
 					print(f"reconnecting to {host}... {e}")
 				last_exception = exc
 				time.sleep(3)
@@ -203,6 +210,9 @@ class star_provider:
 		"""Receives a JSON payload from the coagulator and processes it, sending back either synthesized audio or an error payload."""
 		try:
 			if "voice" in event and "text" in event:
+				if event["id"] in self.canceled_requests:
+					self.canceled_requests.remove(event["id"])
+					return
 				synthesis_result = None
 				if not event["voice"] in self.voices: synthesis_result = f"cannot find voice {event['voice']}"
 				else: synthesis_result = await self.synthesize(self.voices[event["voice"]]["full_name"], event["text"], event["rate"] if "rate" in event else self.synthesis_default_rate, event["pitch"] if "pitch" in event else self.synthesis_default_pitch)
@@ -212,8 +222,15 @@ class star_provider:
 				if type(synthesis_result) == str: await websocket.send(json.dumps({"provider": PROVIDER_REVISION, "id": event["id"], "status": synthesis_result, "abort": True}))
 				else: await websocket.send(len(meta).to_bytes(2, "little") + meta.encode() + synthesis_result)
 		except Exception as e:
+			traceback.print_exc()
 			await websocket.send(json.dumps({"provider": PROVIDER_REVISION, "id": event["id"], "status": f"exception during synthesis {e}", "abort": True}))
+	async def handle_task_queue(self):
+		while True:
+			event = await self.task_queue.get()
+			await self.process_remote_event(*event)
+			self.task_queue.task_done()
 	async def async_main(self):
+		for i in range(int(self.config.get("concurrent_requests", multiprocessing.cpu_count() / 2))): asyncio.create_task(self.handle_task_queue())
 		await asyncio.gather(*[self.connect(host) for host in self.hosts])
 	def run(self):
 		if hasattr(self, "do_configuration_interface"): return self.configuration_interface()
