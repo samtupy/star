@@ -123,7 +123,6 @@ class star_provider:
 		if not hasattr(self, "hosts"): self.hosts = self.config.get("hosts", ["ws://localhost:7774"])
 		if type(self.hosts) == str: self.hosts = [self.hosts]
 		self.read_configuration_options()
-		self.task_queue = asyncio.LifoQueue()
 		self.canceled_requests = set()
 		self.ready_voices()
 		if run_immedietly: self.run()
@@ -230,6 +229,7 @@ class star_provider:
 			await self.process_remote_event(*event)
 			self.task_queue.task_done()
 	async def async_main(self):
+		self.task_queue = asyncio.LifoQueue()
 		for i in range(int(self.config.get("concurrent_requests", multiprocessing.cpu_count() / 2))): asyncio.create_task(self.handle_task_queue())
 		await asyncio.gather(*[self.connect(host) for host in self.hosts])
 	def run(self):
