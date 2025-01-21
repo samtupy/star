@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>STAR Coagulator</title>
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+	<h1>STAR coagulator</h1>
+	<p>Hello {{username}}, welcome to the frontend for this <a href="https://github.com/samtupy/star">STAR</a> coagulator which currently has {{voicecount}} voices online.</p>
+	<details><summary>API</summary>
+	<p>This web service contains 2 API endpoints. You can query /voices to retrieve a list of connected voices in json format, or else /synthesize?voice=v&text=t to synthesize some text and retrieve the resulting audio data. Other parameters such as r=rate and p=pitch are accepted by the /synthesize endpoint as well.</p>
+	</details>
+	<h2>Synthesis from your browser</h2>
+	<form id="quickspeakForm">
+		<label for="voiceSelect">Choose a voice:</label>
+		<select id="voiceSelect">
+			<option value="">--Select a voice--</option>
+		</select>
+		<br>
+		<label for="textInput">Text to quickspeak:</label>
+		<input type="text" id="textInput" placeholder="Enter text here">
+		<br>
+		<button type="button" id="synthesizeButton">Synthesize</button>
+	</form>
+	<div id="liveRegion" aria-live="polite" style="margin-top: 20px; color: red;"></div>
+	<audio id="audioPlayer" controls style="display: none; margin-top: 20px;"></audio>
+
+	<script>
+		const audioCache = new Map()
+		do_synthesis = function() {
+			const selectedVoice = $('#voiceSelect').val();
+			const inputText = $('#textInput').val();
+			if (!selectedVoice) {
+				$('#liveRegion').text('Please select a voice.');
+				return;
+			}
+			if (!inputText.trim()) {
+				$('#liveRegion').text('Please enter text to synthesize.');
+				return;
+			}
+			const audioPlayer = $('#audioPlayer');
+			const cacheKey = `${selectedVoice}:${inputText}`
+			if (audioCache.has(cacheKey)) {
+				audioPlayer.attr('src', audioCache.get(cacheKey));
+				audioPlayer.show();
+				audioPlayer[0].play();
+				return;
+			}
+			$.ajax({
+				url: `/synthesize?voice=${encodeURIComponent(selectedVoice)}&text=${encodeURIComponent(inputText)}`,
+				method: 'GET',
+				success: function (data, status, xhr) {
+					if (xhr.status === 200) {
+						const contentType = xhr.getResponseHeader('Content-Type');
+						const blob = new Blob([data], { type: contentType });
+						const audioUrl = URL.createObjectURL(blob);
+						audioCache.set(cacheKey, audioUrl);
+						audioPlayer.attr('src', audioUrl);
+						audioPlayer.show();
+						audioPlayer[0].play();
+					} else {
+						$('#liveRegion').text('Synthesis failed.');
+					}
+				},
+				error: function (xhr) {
+					$('#liveRegion').text(`Error: ${xhr.responseText || 'Synthesis request failed.'}`);
+				},
+				xhrFields: {
+					responseType: 'blob'
+				}
+			});
+		}
+		$(document).ready(function () {
+			$('#quickspeakForm').on('submit', function (event) {
+				event.preventDefault();
+				do_synthesis();
+			});
+			$.ajax({
+				url: '/voices',
+				method: 'GET',
+				success: function (data) {
+					if (data.voices && Array.isArray(data.voices)) {
+						const voiceSelect = $('#voiceSelect');
+						data.voices.forEach(voice => {
+							voiceSelect.append(new Option(voice, voice));
+						});
+					} else {
+						$('#liveRegion').text('Failed to load voices.');
+					}
+				},
+				error: function () {
+					$('#liveRegion').text('Error fetching voices.');
+				}
+			});
+			$('#synthesizeButton').on('click', function () {
+				do_synthesis()
+			});
+		});
+	</script>
+</body>
+</html>

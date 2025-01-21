@@ -4,18 +4,22 @@ import asyncio
 import argparse
 import configobj
 import json
+import mimetypes
 import random
 import re
 import sys
 import time
 import traceback
+import urllib.parse
 import websockets
 import websockets.asyncio.server
+from websockets.datastructures import Headers
 
 def g(): pass #globals
 g.provider_rev = 3
 g.user_rev = 3
 g.next_client_id = 1
+g.next_web_id = 10000000
 
 def parse_speech_meta(meta):
 	"""Takes speech metadata such as "Sam" or "Sam<r=4 p=-2>" and returns a dictionary of parsed properties such as voice, rate, and pitch."""
@@ -149,6 +153,64 @@ async def on_client_disconnect(ws, client_id):
 				del g.speech_requests[r]
 	except websockets.exceptions.ConnectionClosedOK: pass
 
+class web_send:
+	def __init__(self, connection): self.connection = connection
+	async def __call__(self, message):
+		"""So that the little HTTP API can be added without altering most of the coagulator's code, we just monkeypatch the connection.send method in the below connection_request_handler function so that the existing infrastructure just continues to work. This is the patched send function."""
+		if type(message) == str:
+			self.connection.response_mime = "application/json"
+			self.connection.response_extension = ""
+			self.connection.response = message
+		elif type(message) == bytes:
+			meta_len = int.from_bytes(message[:2], "little")
+			meta = message[2:meta_len+2].decode()
+			if meta.startswith("{"): meta = json.loads(meta)
+			else: meta = {"id": meta}
+			self.connection.response_extension = meta.get("extension", "wav")
+			self.connection.response_mime = mimetypes.guess_type(f"synthesized.{self.connection.response_extension}")[0]
+			self.connection.response = audio = message[meta_len + 2:]
+def make_http_response(connection, status, mime, body):
+	"""The websockets API for http headers is a bit bulky, we need a helper function to set up a response that may be either text or binary."""
+	if isinstance(body, str): body = body.encode()
+	r = connection.respond(status, "")
+	del(r.headers["Content-Type"])
+	del(r.headers["Content-Length"])
+	r.headers.update({"Content-Length": len(body), "Content-Type": mime})
+	r.body = body
+	return r
+async def connection_request_handler(connection, request):
+	auth_failure = await g.authorize(connection, request) if not g.authless else None
+	if auth_failure: return auth_failure
+	if "upgrade" in request.headers: return # This is a websocket connection
+	#Otherwise, a very simple http API is available.
+	path, delim, query = request.path.partition("?")
+	if path == "/":
+		with open("coagulator_index.html", "r") as f: webpage = f.read().replace("{{username}}", getattr(connection, "username", "visitor")).replace("{{voicecount}}", str(len(g.voices)))
+		return make_http_response(connection, 200, "text/html", webpage)
+	elif path == "/voices": return make_http_response(connection, 200, "application/json", json.dumps({"voices": list(g.voices)}))
+	elif path == "/synthesize":
+		args = urllib.parse.parse_qs(query.partition("#")[0])
+		if not args or not "voice" in args and not "text" in args: return connection.respond(400, "missing voice or text argument")
+		connection.send = web_send(connection)
+		connection.response = b""
+		voice = args["voice"][0].partition(":")[0] if "voice" in args and args["voice"] else ""
+		params = []
+		for arg in args:
+			if arg in ["voice", "text"]: continue
+			params += f"{arg}={args[arg]}"
+		if voice:
+			if params: voice += "<" + (" ".join(params)) + ">"
+			voice += ": "
+			g.next_web_id += 1
+		await handle_speech_request({"ws": connection, "id": g.next_web_id}, f"{voice}{args['text'][0]}")
+		while not connection.response:
+			await asyncio.sleep(0.1)
+		if type(connection.response) == str: return make_http_response(connection, 400, connection.response_mime, connection.response)
+		r = make_http_response(connection, 200, connection.response_mime, connection.response)
+		r.headers["content-disposition"] = f'inline; filename="speech{int(time.time())}.{connection.response_extension}"'
+		return r
+	else: return connection.respond(404, "not found")
+
 async def client_handler(ws):
 	"""Manages WebSocket client connections."""
 	client_id = g.next_client_id
@@ -279,7 +341,8 @@ async def main():
 	g.clients = {}
 	handle_args()
 	if g.do_configuration_interface: return configuration()
-	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 10)), max_queue = 4096, process_request = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: "users" in g.config and username in g.config["users"] and g.config["users"][username].get("password", "") == password) if not g.authless else None):
+	g.authorize = websockets.asyncio.server.basic_auth(check_credentials = lambda username, password: "users" in g.config and username in g.config["users"] and g.config["users"][username].get("password", "") == password)
+	async with websockets.asyncio.server.serve(client_handler, g.config.get("bind_address", "0.0.0.0"), int(g.config.get("bind_port", 7774)), max_size = int(g.config.get("max_packet_size", 1024 * 1024 * 10)), max_queue = 4096,  process_request = connection_request_handler):
 		print("Coagulator up.")
 		await asyncio.get_running_loop().create_future()
 
