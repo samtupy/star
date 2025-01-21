@@ -5,6 +5,7 @@ import argparse
 import configobj
 import json
 import mimetypes
+import os
 import random
 import re
 import sys
@@ -182,10 +183,10 @@ async def connection_request_handler(connection, request):
 	auth_failure = await g.authorize(connection, request) if not g.authless else None
 	if auth_failure: return auth_failure
 	if "upgrade" in request.headers: return # This is a websocket connection
-	#Otherwise, a very simple http API is available.
+	#Otherwise, a very simple http API/web frontend is available.
 	path, delim, query = request.path.partition("?")
 	if path == "/":
-		with open("coagulator_index.html", "r") as f: webpage = f.read().replace("{{username}}", getattr(connection, "username", "visitor")).replace("{{voicecount}}", str(len(g.voices)))
+		with open(os.path.join(os.path.dirname(__file__), "coagulator_index.html"), "r") as f: webpage = f.read().replace("{{username}}", getattr(connection, "username", "visitor")).replace("{{voicecount}}", str(len(g.voices)))
 		return make_http_response(connection, 200, "text/html", webpage)
 	elif path == "/voices": return make_http_response(connection, 200, "application/json", json.dumps({"voices": list(g.voices)}))
 	elif path == "/synthesize":
