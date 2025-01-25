@@ -124,7 +124,6 @@ class star_provider:
 		if type(self.hosts) == str: self.hosts = [self.hosts]
 		self.read_configuration_options()
 		self.canceled_requests = set()
-		self.ready_voices()
 		if run_immedietly: self.run()
 	def handle_argv(self):
 		p = argparse.ArgumentParser(argument_default = argparse.SUPPRESS)
@@ -136,12 +135,13 @@ class star_provider:
 		if "configure" in self.args_parsed: self.do_configuration_interface = True
 		if "config" in self.args_parsed: self.config_filename = self.args_parsed.config
 	def get_voices(self):
-		"""Usually  implemented by subclasses. May return a string for a single voiced provider, a list of voice names, or a dictionary with the key being full voice names and the value being a subdictionary with any extra metadata. The default implementation just returns self.initial_voices (set in the constructor) as a shortcut for very simple providers."""
+		"""Usually  implemented by subclasses. May return a string for a single voiced provider, a list of voice names, or a dictionary with the key being full voice names and the value being a subdictionary with any extra metadata. The default implementation just returns self.initial_voices (set in the constructor) as a shortcut for very simple providers. May be an async coroutine if necessary."""
 		return self.initial_voices
-	def ready_voices(self):
+	async def ready_voices(self):
 		"""Retrieves the list of voices by calling self.get_voices() and prepares/filters it for use."""
 		self.voices = {}
-		raw_voices = self.get_voices()
+		if asyncio.iscoroutinefunction(self.get_voices): raw_voices = await self.get_voices()
+		else: raw_voices = self.get_voices()
 		if type(raw_voices) == list: raw_voices = dict.fromkeys(raw_voices, None)
 		elif type(raw_voices) == str: raw_voices = {raw_voices: {}}
 		for k in raw_voices:
@@ -213,8 +213,9 @@ class star_provider:
 					self.canceled_requests.remove(event["id"])
 					return
 				synthesis_result = None
+				synthesis_args = (self.voices[event["voice"]]["full_name"], event["text"], event["rate"] if "rate" in event else self.synthesis_default_rate, event["pitch"] if "pitch" in event else self.synthesis_default_pitch)
 				if not event["voice"] in self.voices: synthesis_result = f"cannot find voice {event['voice']}"
-				else: synthesis_result = await self.synthesize(self.voices[event["voice"]]["full_name"], event["text"], event["rate"] if "rate" in event else self.synthesis_default_rate, event["pitch"] if "pitch" in event else self.synthesis_default_pitch)
+				else: synthesis_result = await self.synthesize(*synthesis_args) if asyncio.iscoroutinefunction(self.synthesize) else self.synthesize(*synthesis_args)
 				meta = {"id": event["id"]}
 				if self.synthesis_audio_extension: meta["extension"] = self.synthesis_audio_extension
 				meta = json.dumps(meta)
@@ -229,14 +230,16 @@ class star_provider:
 			await self.process_remote_event(*event)
 			self.task_queue.task_done()
 	async def async_main(self):
+		await self.ready_voices()
+		if hasattr(self, "do_configuration_interface"): return self.configuration_interface()
 		self.task_queue = asyncio.LifoQueue()
 		for i in range(int(self.config.get("concurrent_requests", multiprocessing.cpu_count() / 2))): asyncio.create_task(self.handle_task_queue())
 		await asyncio.gather(*[self.connect(host) for host in self.hosts])
 	def run(self):
-		if hasattr(self, "do_configuration_interface"): return self.configuration_interface()
 		while True:
 			try:
 				asyncio.run(self.async_main())
+				if hasattr(self, "do_configuration_interface"): return
 			except KeyboardInterrupt:
 				print("shutting down")
 				break

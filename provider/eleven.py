@@ -1,3 +1,4 @@
+# pip install elevenlabs
 from provider import star_provider
 from elevenlabs.client import AsyncElevenLabs
 from elevenlabs.client import ElevenLabs

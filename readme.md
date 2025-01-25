@@ -91,8 +91,10 @@ Arguments:
 * synthesis_audio_extension: This hint is eventually passed along to user clients upon synthesis, telling them what file extension to save speech clips as that have been received by your provider. Should be mp3, ogg, opus etc. A value of None (the default) is the same as wav.
 
 You might be interested in overriding the following methods in a subclass of the star_provider object if you need more advanced functionality than what the base object provides:
-* async def synthesize(self, voice, text, rate = None, pitch = None): This method can return a bytes like object containing synthesized wave data, or an error string if synthesis was not successful. The voice argument is garenteed to be set to one of the voices you told the provider about. Beware the async nature of this function.
+* def synthesize(self, voice, text, rate = None, pitch = None): This method can return a bytes like object containing synthesized wave data, or an error string if synthesis was not successful. The voice argument is garenteed to be set to one of the voices you told the provider about.
 * def get_voices(self): This function can either return a single voice name as a string, a list of voice names, or a dictionary with the key being a voice name and the value being a subdictionary with extra metadata about the voice (E for language codes etc in future).
+
+Both of these functions can be async if necessary.
 
 ### Writing a speech provider from scratch
 Usually, it's best to inherit from the provided python provider class rather than doing this from scratch, but below are the instructions nevertheless which can be useful for example if you wish to write a provider that runs on an embedded device or in any other environment where modern python is not available.
