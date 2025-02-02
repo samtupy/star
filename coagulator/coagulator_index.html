@@ -10,7 +10,7 @@
 	<h1>STAR coagulator</h1>
 	<p>Hello {{username}}, welcome to the frontend for this <a href="https://github.com/samtupy/star">STAR</a> coagulator which currently has {{voicecount}} voices online.</p>
 	<details><summary>API</summary>
-	<p>This web service contains 2 API endpoints. You can query /voices to retrieve a list of connected voices in json format, or else /synthesize?voice=v&text=t to synthesize some text and retrieve the resulting audio data. Other parameters such as r=rate and p=pitch are accepted by the /synthesize endpoint as well.</p>
+	<p>This web service contains 2 API endpoints. You can query /voices to retrieve a list of connected voices in json format, or else /synthesize?voice=v&text=t to synthesize some text and retrieve the resulting audio data. Other parameters such as r=rate and p=pitch are accepted by the /synthesize endpoint as well. If you wish for a more complete interface, the standard websocket protocol is recommended in that case.</p>
 	</details>
 	<h2>Synthesis from your browser</h2>
 	<form id="quickspeakForm">
@@ -29,9 +29,9 @@
 
 	<script>
 		const audioCache = new Map();
-		do_synthesis = function() {
+		do_synthesis = function(textOverride) {
 			const selectedVoice = $('#voiceSelect').val();
-			const inputText = $('#textInput').val();
+			const inputText = textOverride || $('#textInput').val();
 			if (!selectedVoice) {
 				$('#liveRegion').text('Please select a voice.');
 				return;
@@ -95,7 +95,15 @@
 				}
 			});
 			$('#synthesizeButton').on('click', function () {
-				do_synthesis()
+				do_synthesis();
+			});
+			$('#voiceSelect').on('dblclick keypress', function (event) {
+				if (event.type === 'dblclick' || (event.type === 'keypress' && event.key === 'Enter')) {
+					const selectedVoice = $('#voiceSelect').val();
+					if (selectedVoice) {
+						do_synthesis(`Hello there, my name is ${selectedVoice}`);
+					}
+				}
 			});
 		});
 	</script>

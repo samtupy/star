@@ -14,7 +14,6 @@ import traceback
 import urllib.parse
 import websockets
 import websockets.asyncio.server
-from websockets.datastructures import Headers
 
 def g(): pass #globals
 g.provider_rev = 3
@@ -86,7 +85,7 @@ async def handle_speech_request(client, request, id=""):
 
 async def on_message(ws, client, message):
 	"""Handles incoming WebSocket messages."""
-	if type(message) == bytes:
+	if isinstance(message, bytes):
 		meta_len = int.from_bytes(message[:2], "little")
 		meta = message[2:meta_len+2].decode()
 		if meta.startswith("{"): meta = json.loads(meta)
@@ -155,14 +154,15 @@ async def on_client_disconnect(ws, client_id):
 	except websockets.exceptions.ConnectionClosedOK: pass
 
 class web_send:
+	"""Helper class for STAR's tiny frontend API that allows it to be able to work with existing infrastructure."""
 	def __init__(self, connection): self.connection = connection
 	async def __call__(self, message):
 		"""So that the little HTTP API can be added without altering most of the coagulator's code, we just monkeypatch the connection.send method in the below connection_request_handler function so that the existing infrastructure just continues to work. This is the patched send function."""
-		if type(message) == str:
+		if isinstance(message, str):
 			self.connection.response_mime = "application/json"
 			self.connection.response_extension = ""
 			self.connection.response = message
-		elif type(message) == bytes:
+		elif isinstance(message, bytes):
 			meta_len = int.from_bytes(message[:2], "little")
 			meta = message[2:meta_len+2].decode()
 			if meta.startswith("{"): meta = json.loads(meta)
@@ -180,10 +180,12 @@ def make_http_response(connection, status, mime, body):
 	r.body = body
 	return r
 async def connection_request_handler(connection, request):
+	"""Called by the websockets framework upon each http connection, this checks for basic authentication before handling and serving up the coagulator's simple HTTP frontend if needed."""
 	auth_failure = await g.authorize(connection, request) if not g.authless else None
 	if auth_failure: return auth_failure
 	if "upgrade" in request.headers: return # This is a websocket connection
-	#Otherwise, a very simple http API/web frontend is available.
+	#Otherwise, a very simple http API/web frontend is available,
+	if "http_frontend" in g.config and not g.config.as_bool("http_frontend"): return # unless it's been disabled.
 	path, delim, query = request.path.partition("?")
 	if path == "/":
 		with open(os.path.join(os.path.dirname(__file__), "coagulator_index.html"), "r") as f: webpage = f.read().replace("{{username}}", getattr(connection, "username", "visitor")).replace("{{voicecount}}", str(len(g.voices)))
@@ -206,7 +208,7 @@ async def connection_request_handler(connection, request):
 		await handle_speech_request({"ws": connection, "id": g.next_web_id}, f"{voice}{args['text'][0]}")
 		while not connection.response:
 			await asyncio.sleep(0.1)
-		if type(connection.response) == str: return make_http_response(connection, 400, connection.response_mime, connection.response)
+		if isinstance(connection.response, str): return make_http_response(connection, 400, connection.response_mime, connection.response)
 		r = make_http_response(connection, 200, connection.response_mime, connection.response)
 		r.headers["content-disposition"] = f'inline; filename="speech{int(time.time())}.{connection.response_extension}"'
 		return r
@@ -299,6 +301,10 @@ def configuration():
 				print("must be a valid user number")
 				continue
 			usermod(list(g.config["users"])[int(opt) -1])
+	def toggle_http_frontend():
+		value = g.config.as_bool("http_frontend") if "http_frontend" in g.config else True
+		g.config["http_frontend"] = not value
+		print("HTTP frontend " + ("enabled" if not value else "disabled"))
 	def set_var(varname, prompt, default = "", validator = None):
 		data = g.config.get(varname, default)
 		while True:
@@ -311,12 +317,13 @@ def configuration():
 			g.config[varname] = new_data
 			break
 		print("configuration updated")
-	options = [("add a user", "useradd"), ("change or delete a user", "usermod"), ("set bind address", "bindaddr"), ("set bind port", "bindport"), ("save and exit", "X"), ("exit without saving", "x")]
+	options = [("add a user", "useradd"), ("change or delete a user", "usermod"), ("set bind address", "bindaddr"), ("set bind port", "bindport"), ("{frontend_action} HTTP frontend", "http_frontend"), ("save and exit", "X"), ("exit without saving", "x")]
 	options_str = "Select an option, follow all input with return:\n"
 	for i, o in enumerate(options):
 		options_str += f"{i + 1}: {o[0]}\n"
 	while True:
-		opt = input(options_str)
+		try: opt = input(options_str.format(frontend_action = "enable" if "http_frontend" in g.config and not g.config.as_bool("http_frontend") else "disable"))
+		except EOFError: return
 		if not opt: continue
 		if not opt.isdigit():
 			print("only digits accepted")
@@ -330,6 +337,7 @@ def configuration():
 		elif opt == "usermod": userlist()
 		elif opt == "bindaddr": set_var("bind_address", "enter address to bind to", "0.0.0.0")
 		elif opt == "bindport": set_var("bind_port", "enter port to bind to", 7774, lambda value: "port must be a number between 1 and 65535" if not value.isdigit() or int(value) < 1 or int(value) > 65535 else "")
+		elif opt == "http_frontend": toggle_http_frontend()
 		elif opt == "X":
 			g.config.write()
 			print("configuration saved")

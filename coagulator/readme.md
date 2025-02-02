@@ -40,6 +40,19 @@ On linux, a systemd .service file is provided if you want the coagulator you are
 3. Configure the coagulator with the same command as usual.
 4. Run `sudo systemd start starserver` to bring the server up, `sudo systemd stop starserver` to bring the server down, `sudo systemctl enable starserver` to make the server auto start on boot, or `sudo systemctl disable starserver` to prevent the auto start.
 
+If you want to change the coagulator's configuration, such as to add a user, you can run the configuration command at any time. However after saving the configuration, you must then run `sudo systemctl restart starserver` for the configuration changes to take effect.
+
+## Web interface and API
+By default, STAR coagulators include a very simple web frontend which allows basic voice synthesis directly from a browser or with a tiny API.
+
+So long as coagulator_index.html is in the same directory as coagulator.py and so long as this feature has not been disabled in the configuration, it is possible to browse to http://username:password@coagulator:port to access a tiny web frontend that allows you to preview voices and synthesize text to them.
+
+While the web frontend doesn't natively support rendering to disk, it is possible to fetch the audio data for a line of synthesis using the little API offered by this web service which is self-described on the page. For example, the following is a cool curl command that will speak some text to the ffplay utility if that is installed.
+
+```curl -s "http://user:password@domain.com:7774/synthesize?voice=microsoft+sam&text=this+is+a+test!"|ffplay - -showmode 0 -loglevel -8 -autoexit```
+
+If you wish to disable this frontend for your coagulator, you can either set http_frontend = False in coagulator.ini, or set the option to your desired value using the coagulator's --configure argument. If this is disabled and someone browses to the page via http, they will get an error message about not being able to upgrade to a websocket connection, which was what happened before this frontend was introduced.
+
 ## Sharing your coagulator's URI and other tips
 Both the user client and STAR providers connect to your coagulator using standardized URI syntax with the WebSocket (ws) scheme. That is, a valid URI might look like ws://username:password@address:port.
 
@@ -47,4 +60,4 @@ So if your server has the IP address 2.3.4.5 and you host a coagulator on the de
 
 It might be best to avoid passwords with special characters for now, as such characters need to be URL encoded making them more difficult to type in URI form. For example if a password has an @ character in it such as 'my_password@secure', the uri would look like ws://user:my_password%40secure@host:port, otherwise as you can imagine the system would get confused and think that the word secure after the first @ character was part of the address!
 
-Please be aware that as this application does not protect anything particularly sensative, passwords are stored in plain-text in the coagulator's configuration file at this time. As such, avoid the usage of passwords that are similar to those that might be used elsewhere for more sensative services.
+Please be aware that as this application does not protect anything particularly sensative, passwords are stored in plain-text in the coagulator's configuration file at this time. As such, it is strongly recommended that you avoid the usage of passwords that are similar to those that might be used elsewhere for more sensative services.

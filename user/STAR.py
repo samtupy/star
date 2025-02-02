@@ -16,13 +16,13 @@ import threading
 import time
 import traceback
 import websockets.sync.client
+import websockets.uri
 import wx
 
 USER_REVISION = 3
 
 speech = accessible_output2.outputs.auto.Auto()
 sound_output=output.Output(0)
-VirtualSmartList.allowed_navigation_keys += [ord(i) for i in "abcdefghijklmnopqrstuvwxyz1234567890"]
 config = configobj.ConfigObj(os.path.join(os.path.dirname(__file__), "STAR.ini"))
 
 playsound_devices = sound_output.get_device_names()
@@ -65,10 +65,11 @@ class playsound:
 		if self.handle: self.finish_func(self)
 
 def is_valid_ws_uri(uri):
-	"""Helper function to insure a provided host is basically a valid websocket URI. Returns either True or an error string, doesn't really do all that much validation right now."""
+	"""Helper function to insure a provided host is a valid websocket URI. Returns either True or an error string."""
 	if not uri: return "must not be empty"
-	if not uri.startswith("ws://") and not uri.startswith("wss://"): return "must start with a valid scheme (ws or wss)"
-	return True
+	try: websockets.uri.parse_uri(uri)
+	except Exception as e: return str(e)
+	return True;
 
 def parse_textline(textline, aliases = {}):
 	"""This utility function splits the provided line of script (Mike<r=2>: Hi there) into a tuple of voicename, params, text. Aliases is a dictionary of alias: full_voicename, and the returned voicename will be run through this replacement dictionary."""
@@ -114,7 +115,7 @@ render_filename_tokens = [
 	("text", "The item's text altered minimally to fit in a filename", lambda render: slugify(render.text[:200])),
 	("text1", "The first word of the item's text", lambda render: slugify(" ".join(render.text[:200].split(" ")[:1]))),
 	*[(f"text{i}", f"The item's first {i} words of text", lambda render, i = i: slugify(" ".join(render.text[:200].split(" ")[:i]))) for i in [2, 3, 5, 10, 15, 20]],
-	("date", f"the date in the format {time.strftime("%Y-%m-%d")}", lambda render: time.strftime("%Y-%m-%d")),
+	("date", f"the date in the format {time.strftime('%Y-%m-%d')}", lambda render: time.strftime("%Y-%m-%d")),
 ]
 
 def render_filename_tokens_help():
@@ -631,7 +632,10 @@ class star_client(wx.Frame):
 				with websockets.sync.client.connect(host, max_size = None, max_queue = 4096) as websocket:
 					wx.PostEvent(self, remote_event({"connect": websocket}))
 					while not self.connection_abort.wait(0.005):
-						message = websocket.recv()
+						try: message = websocket.recv(30)
+						except TimeoutError:
+							websocket.ping()
+							continue
 						if type(message) == bytes:
 							wx.PostEvent(self, remote_event({"binary": message, "websocket": websocket}))
 						else:
