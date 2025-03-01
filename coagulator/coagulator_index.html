@@ -1,290 +1,277 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STAR Coagulator</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
-        }
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>STAR Coagulator</title>
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			margin: 0;
+			padding: 0;
+			background-color: #f4f4f4;
+		}
 
-        .container {
-            width: 80%;
-            max-width: 1000px;
-            margin: 40px auto;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
+		.container {
+			width: 80%;
+			max-width: 1000px;
+			margin: 40px auto;
+			background-color: #fff;
+			padding: 20px;
+			border-radius: 8px;
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+		}
 
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-        }
+		h1 {
+			text-align: center;
+			color: #333;
+			margin-bottom: 20px;
+		}
 
-        h2 {
-            color: #555;
-            margin-top: 30px;
-        }
+		h2 {
+			color: #555;
+			margin-top: 30px;
+		}
 
-        p, a {
-            font-size: 16px;
-            color: #333;
-        }
+		p, a {
+			font-size: 16px;
+			color: #333;
+		}
 
-        a {
-            color: #007BFF;
-            text-decoration: none;
-        }
+		a {
+			color: #007BFF;
+			text-decoration: none;
+		}
 
-        a:hover {
-            text-decoration: underline;
-        }
+		a:hover {
+			text-decoration: underline;
+		}
 
-        form {
-            display: flex;
-            flex-direction: column;
-            margin-top: 20px;
-        }
+		form {
+			display: flex;
+			flex-direction: column;
+			margin-top: 20px;
+		}
 
-        label {
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
+		label {
+			margin-bottom: 8px;
+			font-weight: bold;
+		}
 
-        select, input[type="text"], button {
-            padding: 10px;
-            font-size: 16px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            outline: none;
-        }
+		select, input[type="text"], button {
+			padding: 10px;
+			font-size: 16px;
+			margin-bottom: 20px;
+			border-radius: 5px;
+			border: 1px solid #ccc;
+			outline: none;
+		}
 
-        select:focus, input[type="text"]:focus, button:focus {
-            border-color: #007BFF;
-        }
+		select:focus, input[type="text"]:focus, button:focus {
+			border-color: #007BFF;
+		}
 
-        button {
-            background-color: #007BFF;
-            color: white;
-            cursor: pointer;
-            border: none;
-        }
+		button {
+			background-color: #007BFF;
+			color: white;
+			cursor: pointer;
+			border: none;
+		}
 
-        button:hover {
-            background-color: #0056b3;
-        }
+		button:hover {
+			background-color: #0056b3;
+		}
 
-        #liveRegion {
-            margin-top: 20px;
-            color: red;
-            font-weight: bold;
-        }
+		#liveRegion {
+			margin-top: 20px;
+			color: red;
+			font-weight: bold;
+		}
 
-        audio {
-            display: block;
-            width: 100%;
-            margin-top: 20px;
-            border-radius: 8px;
-        }
+		audio {
+			display: block;
+			width: 100%;
+			margin-top: 20px;
+			border-radius: 8px;
+		}
 
-        details {
-            margin-top: 30px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 8px;
-        }
+		details {
+			margin-top: 30px;
+			padding: 15px;
+			background-color: #f9f9f9;
+			border-radius: 8px;
+		}
 
-        .search-container {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }
+		.search-container {
+			display: flex;
+			align-items: center;
+			margin-bottom: 15px;
+		}
 
-        #voiceSearch {
-            flex: 1;
-            margin-right: 10px;
-        }
-    </style>
+		#voiceSearch {
+			flex: 1;
+		}
+	</style>
 </head>
 <body>
-    <div class="container">
-        <h1>STAR Coagulator</h1>
-        <p>Hello {{username}}, welcome to the frontend for this <a href="https://github.com/samtupy/star">STAR</a> coagulator which currently has {{voicecount}} voices online.</p>
+	<div class="container">
+		<h1>STAR Coagulator</h1>
+		<p>Hello {{username}}, welcome to the frontend for this <a href="https://github.com/samtupy/star">STAR</a> coagulator which currently has {{voicecount}} voices online.</p>
 
-        <details>
-            <summary>API</summary>
-            <p>This web service contains 2 API endpoints. You can query /voices to retrieve a list of connected voices in json format, or else /synthesize?voice=v&text=t to synthesize some text and retrieve the resulting audio data. Other parameters such as r=rate and p=pitch are accepted by the /synthesize endpoint as well. If you wish for a more complete interface, the standard websocket protocol is recommended in that case.</p>
-        </details>
+		<details>
+			<summary>API</summary>
+			<p>This web service contains 2 API endpoints. You can query /voices to retrieve a list of connected voices in json format, or else /synthesize?voice=v&text=t to synthesize some text and retrieve the resulting audio data. Other parameters such as r=rate and p=pitch are accepted by the /synthesize endpoint as well. If you wish for a more complete interface, the standard websocket protocol is recommended in that case.</p>
+		</details>
 
-        <h2>Synthesis from your browser</h2>
-        <form id="quickspeakForm">
-            <div class="search-container">
-                <input type="text" id="voiceSearch" placeholder="Search for a voice..." aria-label="Search for a voice">
-                <button type="button" id="searchButton">Search</button>
-            </div>
+		<h2>Synthesis from your browser</h2>
+		<form id="quickspeakForm">
+			<div class="search-container">
+				<input type="text" id="voiceSearch" placeholder="Search for a voice..." aria-label="Search for a voice">
+			</div>
 
-            <label for="voiceSelect">Choose a voice:</label>
-            <select id="voiceSelect">
-                <option value="">--Select a voice--</option>
-            </select>
+			<label for="voiceSelect">Choose a voice:</label>
+			<select id="voiceSelect">
+				<option value="">--Select a voice--</option>
+			</select>
 
-            <button type="button" id="previewButton">Preview</button>
+			<button type="button" id="previewButton">Preview</button>
 
-            <label for="textInput">Text to quickspeak:</label>
-            <input type="text" id="textInput" placeholder="Enter text here">
+			<label for="textInput">Text to quickspeak:</label>
+			<input type="text" id="textInput" placeholder="Enter text here">
 
-            <button type="submit" id="synthesizeButton">Synthesize</button>
-        </form>
+			<button type="submit" id="synthesizeButton">Synthesize</button>
+		</form>
 
-        <button type="button" id="downloadButton" style="display:none;">Download Audio</button>
+		<button type="button" id="downloadButton" style="display:none;">Download Audio</button>
 
-        <div id="liveRegion" aria-live="polite"></div>
-        <audio id="audioPlayer" controls style="display: none;"></audio>
-    </div>
+		<div id="liveRegion" aria-live="polite"></div>
+		<audio id="audioPlayer" controls style="display: none;"></audio>
+	</div>
 
-    <script>
-        const audioCache = new Map();
-        let currentAudioUrl = '';
+	<script>
+		const audioCache = new Map();
+		let currentAudioUrl = '';
+		let availableVoices = [];
 
-        function do_synthesis(textOverride) {
-            const selectedVoice = $('#voiceSelect').val();
-            const inputText = textOverride || $('#textInput').val();
-            if (!selectedVoice) {
-                $('#liveRegion').text('Please select a voice.');
-                return;
-            }
-            if (!inputText.trim()) {
-                $('#liveRegion').text('Please enter text to synthesize.');
-                return;
-            }
-            const audioPlayer = $('#audioPlayer');
-            const cacheKey = `${selectedVoice}:${inputText}`;
-            if (audioCache.has(cacheKey)) {
-                currentAudioUrl = audioCache.get(cacheKey);
-                audioPlayer.attr('src', currentAudioUrl);
-                audioPlayer.show();
-                audioPlayer[0].play();
-                $('#downloadButton').show();
-                return;
-            }
-            $.ajax({
-                url: `/synthesize?voice=${encodeURIComponent(selectedVoice)}&text=${encodeURIComponent(inputText)}`,
-                method: 'GET',
-                success: function (data, status, xhr) {
-                    if (xhr.status === 200) {
-                        const contentType = xhr.getResponseHeader('Content-Type');
-                        const blob = new Blob([data], { type: contentType });
-                        currentAudioUrl = URL.createObjectURL(blob);
-                        audioCache.set(cacheKey, currentAudioUrl);
-                        audioPlayer.attr('src', currentAudioUrl);
-                        audioPlayer.show();
-                        audioPlayer[0].play();
-                        $('#downloadButton').show();
-                    } else {
-                        $('#liveRegion').text('Synthesis failed.');
-                    }
-                },
-                error: function (xhr) {
-                    $('#liveRegion').text(`Error: ${xhr.responseText || 'Synthesis request failed.'}`);
-                },
-                xhrFields: {
-                    responseType: 'blob'
-                }
-            });
-        }
+		function do_synthesis(textOverride) {
+			const selectedVoice = $('#voiceSelect').val();
+			const inputText = textOverride || $('#textInput').val();
+			if (!selectedVoice) {
+				$('#liveRegion').text('Please select a voice.');
+				return;
+			}
+			if (!inputText.trim()) {
+				$('#liveRegion').text('Please enter text to synthesize.');
+				return;
+			}
+			const audioPlayer = $('#audioPlayer');
+			const cacheKey = `${selectedVoice}:${inputText}`;
+			if (audioCache.has(cacheKey)) {
+				currentAudioUrl = audioCache.get(cacheKey);
+				audioPlayer.attr('src', currentAudioUrl);
+				audioPlayer.show();
+				audioPlayer[0].play();
+				$('#downloadButton').show();
+				return;
+			}
+			$.ajax({
+				url: `/synthesize?voice=${encodeURIComponent(selectedVoice)}&text=${encodeURIComponent(inputText)}`,
+				method: 'GET',
+				success: function (data, status, xhr) {
+					if (xhr.status === 200) {
+						const contentType = xhr.getResponseHeader('Content-Type');
+						const blob = new Blob([data], { type: contentType });
+						currentAudioUrl = URL.createObjectURL(blob);
+						audioCache.set(cacheKey, currentAudioUrl);
+						audioPlayer.attr('src', currentAudioUrl);
+						audioPlayer.show();
+						audioPlayer[0].play();
+						$('#downloadButton').show();
+					} else {
+						$('#liveRegion').text('Synthesis failed.');
+					}
+				},
+				error: function (xhr) {
+					$('#liveRegion').text(`Error: ${xhr.responseText || 'Synthesis request failed.'}`);
+				},
+				xhrFields: {
+					responseType: 'blob'
+				}
+			});
+		}
 
-        document.addEventListener('DOMContentLoaded', function () {
-            // Load voices and handle form submission without refreshing the page
-            $.ajax({
-                url: '/voices',
-                method: 'GET',
-                success: function (data) {
-                    if (data.voices && Array.isArray(data.voices)) {
-                        const voiceSelect = $('#voiceSelect');
-                        data.voices.forEach(voice => {
-                            voiceSelect.append(new Option(voice, voice));
-                        });
-                    } else {
-                        $('#liveRegion').text('Failed to load voices.');
-                    }
-                },
-                error: function () {
-                    $('#liveRegion').text('Error fetching voices.');
-                }
-            });
+		function populateVoiceList(searchQuery) {
+			const voiceSelect = $('#voiceSelect');
+			voiceSelect.empty().append(new Option('--Select a voice--', ''));
+			availableVoices.forEach(voice => {
+				if (voice.toLowerCase().includes(searchQuery.toLowerCase())) {
+					voiceSelect.append(new Option(voice, voice));
+				}
+			});
+		}
 
-            $('#quickspeakForm').on('submit', function (event) {
-                event.preventDefault(); // Important to prevent form submission
-                do_synthesis();
-            });
+		document.addEventListener('DOMContentLoaded', function () {
+			// Load voices initially
+			$.ajax({
+				url: '/voices',
+				method: 'GET',
+				success: function (data) {
+					if (data.voices && Array.isArray(data.voices)) {
+						availableVoices = data.voices;
+						populateVoiceList('');
+					} else {
+						$('#liveRegion').text('Failed to load voices.');
+					}
+				},
+				error: function () {
+					$('#liveRegion').text('Error fetching voices.');
+				}
+			});
 
-            // Handle Enter key separately for search and synthesis inputs
-            $('#voiceSearch').on('keypress', function (event) {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    $('#searchButton').click();
-                }
-            });
+			$('#quickspeakForm').on('submit', function (event) {
+				event.preventDefault(); // Important to prevent form submission
+				do_synthesis();
+			});
 
-            $('#searchButton').on('click', function () {
-                const searchQuery = $('#voiceSearch').val().toLowerCase();
-                const voiceSelect = $('#voiceSelect');
-                voiceSelect.empty().append(new Option('--Select a voice--', ''));
+			// Dynamically filter voices as the user types in the search box
+			$('#voiceSearch').on('input', function () {
+				const searchQuery = $(this).val();
+				populateVoiceList(searchQuery);
+			});
 
-                $.ajax({
-                    url: '/voices',
-                    method: 'GET',
-                    success: function (data) {
-                        if (data.voices && Array.isArray(data.voices)) {
-                            data.voices.forEach(voice => {
-                                if (voice.toLowerCase().includes(searchQuery) || searchQuery === '') {
-                                    voiceSelect.append(new Option(voice, voice));
-                                }
-                            });
-                        }
-                    },
-                    error: function () {
-                        $('#liveRegion').text('Error fetching voices.');
-                    }
-                });
-            });
+			$('#textInput').on('keypress', function (event) {
+				if (event.key === 'Enter') {
+					event.preventDefault();
+					$('#synthesizeButton').click();
+				}
+			});
 
-            $('#textInput').on('keypress', function (event) {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    $('#synthesizeButton').click();
-                }
-            });
+			// Click handler for previewing voices
+			$('#previewButton').on('click', function() {
+				const selectedVoice = $('#voiceSelect').val();
+				if (selectedVoice) {
+					do_synthesis(`Hello there, my name is ${selectedVoice}.`);
+				} else {
+					$('#liveRegion').text('Please select a voice to preview.');
+				}
+			});
 
-            // Click handler for previewing voices
-            $('#previewButton').on('click', function() {
-                const selectedVoice = $('#voiceSelect').val();
-                if (selectedVoice) {
-                    do_synthesis(`Hello there, my name is ${selectedVoice}. I am here to preview my voice for you.`);
-                } else {
-                    $('#liveRegion').text('Please select a voice to preview.');
-                }
-            });
+			// Send a click to the preview button when the voice dropdown is clicked
+			$('#voiceSelect').on('click', function() {
+				$('#previewButton').click();
+			});
 
-            // Event handler for downloading the audio without a dialog
-            $('#downloadButton').on('click', function () {
-                if (currentAudioUrl) {
-                    const link = document.createElement('a');
-                    link.href = currentAudioUrl;
-                    link.download = 'speech.wav'; // Hardcoded filename
-                    link.click();
-                }
-            });
-        });
-    </script>
+			// Event handler for downloading the audio without a dialog
+			$('#downloadButton').on('click', function () {
+				if (currentAudioUrl) {
+					const link = document.createElement('a');
+					link.href = currentAudioUrl;
+					link.download = 'speech.wav'; // Hardcoded filename
+					link.click();
+				}
+			});
+		});
+	</script>
 </body>
 </html>
