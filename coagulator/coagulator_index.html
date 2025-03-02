@@ -153,7 +153,6 @@
 		const audioCache = new Map();
 		let currentAudioUrl = '';
 		let availableVoices = [];
-
 		function do_synthesis(textOverride) {
 			const selectedVoice = $('#voiceSelect').val();
 			const inputText = textOverride || $('#textInput').val();
@@ -200,17 +199,16 @@
 				}
 			});
 		}
-
 		function populateVoiceList(searchQuery) {
+			searchQuery = (searchQuery || '').toLowerCase()
 			const voiceSelect = $('#voiceSelect');
 			voiceSelect.empty().append(new Option('--Select a voice--', ''));
 			availableVoices.forEach(voice => {
-				if (voice.toLowerCase().includes(searchQuery.toLowerCase())) {
+				if (searchQuery == '' || voice.toLowerCase().includes(searchQuery)) {
 					voiceSelect.append(new Option(voice, voice));
 				}
 			});
 		}
-
 		function isDesktopPlatform() {
 			const userAgent = navigator.userAgent || navigator.vendor || window.opera;
 
@@ -223,7 +221,6 @@
 			}
 			return true; // It's likely a desktop platform
 		}
-
 		document.addEventListener('DOMContentLoaded', function () {
 			// Load voices initially
 			$.ajax({
@@ -232,7 +229,7 @@
 				success: function (data) {
 					if (data.voices && Array.isArray(data.voices)) {
 						availableVoices = data.voices;
-						populateVoiceList('');
+						populateVoiceList();
 					} else {
 						$('#liveRegion').text('Failed to load voices.');
 					}
@@ -241,13 +238,10 @@
 					$('#liveRegion').text('Error fetching voices.');
 				}
 			});
-
 			$('#quickspeakForm').on('submit', function (event) {
 				event.preventDefault(); // Important to prevent form submission
 				do_synthesis();
 			});
-
-			// Dynamically filter voices as the user types in the search box
 			$('#voiceSearch').on('input', function () {
 				const searchQuery = $(this).val();
 				populateVoiceList(searchQuery);
@@ -259,8 +253,6 @@
 					$('#synthesizeButton').click();
 				}
 			});
-
-			// Click handler for previewing voices
 			$('#previewButton').on('click', function() {
 				const selectedVoice = $('#voiceSelect').val();
 				if (selectedVoice) {
@@ -269,15 +261,11 @@
 					$('#liveRegion').text('Please select a voice to preview.');
 				}
 			});
-
-			// Only send a click to the preview button when the voice dropdown is clicked on desktop platform
-			$('#voiceSelect').on('click', function() {
-				if (isDesktopPlatform()) {
+			$('#voiceSelect').on('dblclick keypress', function(event) {
+				if (event.type === 'dblclick' && isDesktopPlatform() || event.type === 'keypress' && event.key === 'Enter') {
 					$('#previewButton').click();
 				}
 			});
-
-			// Event handler for downloading the audio without a dialog
 			$('#downloadButton').on('click', function () {
 				if (currentAudioUrl) {
 					const link = document.createElement('a');
