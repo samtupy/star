@@ -211,6 +211,19 @@
 			});
 		}
 
+		function isDesktopPlatform() {
+			const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+
+			// Define some common mobile devices
+			if (/windows phone/i.test(userAgent) || 
+				/iphone|ipod|ipad/i.test(userAgent) || 
+				/android/i.test(userAgent) || 
+				/blackberry/i.test(userAgent)) {
+				return false; // It's a mobile platform
+			}
+			return true; // It's likely a desktop platform
+		}
+
 		document.addEventListener('DOMContentLoaded', function () {
 			// Load voices initially
 			$.ajax({
@@ -257,9 +270,11 @@
 				}
 			});
 
-			// Send a click to the preview button when the voice dropdown is clicked
+			// Only send a click to the preview button when the voice dropdown is clicked on desktop platform
 			$('#voiceSelect').on('click', function() {
-				$('#previewButton').click();
+				if (isDesktopPlatform()) {
+					$('#previewButton').click();
+				}
 			});
 
 			// Event handler for downloading the audio without a dialog
@@ -267,7 +282,7 @@
 				if (currentAudioUrl) {
 					const link = document.createElement('a');
 					link.href = currentAudioUrl;
-					link.download = 'speech.wav'; // Hardcoded filename
+					link.download = 'speech'; // Hardcoded filename
 					link.click();
 				}
 			});
