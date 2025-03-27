@@ -288,7 +288,7 @@ class star_client(wx.Frame):
 		self.run_local_btn.Enabled = config.get("host", "") != "local"
 		wx.Button(self.connecting_panel, label = "&Options").Bind(wx.EVT_BUTTON, self.on_options)
 		wx.Button(self.connecting_panel, label = "&Exit").Bind(wx.EVT_BUTTON, self.on_exit_btn)
-		self.main_sizer = wx.BoxSizer()
+		self.main_sizer = wx.BoxSizer(wx.VERTICAL)
 		wx.StaticText(self.main_panel, -1, "&Voices")
 		self.voices_list = VirtualSmartList(parent = self.main_panel, style = wx.LC_REPORT | wx.LC_SINGLE_SEL, get_virtual_item = lambda v: self.voices[v], update_cache = lambda v_from, v_to: self.voices[v_from:v_to + 1])
 		self.voices_list.SetLabel("Voices")
@@ -356,6 +356,10 @@ class star_client(wx.Frame):
 		self.render_total = 0
 		self.Show()
 		self.Centre()
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		sizer.Add(self.connecting_panel, 1, wx.EXPAND)
+		sizer.Add(self.main_panel, 1, wx.EXPAND)
+		self.SetSizer(sizer)
 		self.connection_abort = threading.Event()
 		if "host" in config and config["host"] != "" and not self.configuration.validate():
 			r = self.on_options()
