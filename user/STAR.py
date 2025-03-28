@@ -432,7 +432,8 @@ class star_client(wx.Frame):
 			speech.speak("nothing to speak")
 			return
 		self.script_continuous_preview = False
-		self.audiospeak(f"{self.voices[voice]['name']}: {self.quickspeak.Value.replace('\n', '  ')}")
+		text_to_quickspeak = self.quickspeak.Value.replace('\n', '  ')
+		self.audiospeak(f"{self.voices[voice]['name']}: {text_to_quickspeak}")
 	def on_preview_script(self, evt):
 		"""The script previewing facility, handles ctrl+alt+(space, up and down) calling self.audiospeak for each speech line detected."""
 		pos = self.script.GetInsertionPoint()
