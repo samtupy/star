@@ -19,7 +19,7 @@ import websockets.sync.client
 import websockets.uri
 import wx
 
-USER_REVISION = 3
+USER_REVISION = 4
 
 speech = accessible_output2.outputs.auto.Auto()
 sound_output=output.Output(0)
@@ -354,6 +354,7 @@ class star_client(wx.Frame):
 		self.websocket = None
 		self.script_continuous_preview = False
 		self.render_total = 0
+		self.last_renderable_lines = []
 		self.Show()
 		self.Centre()
 		sizer = wx.BoxSizer(wx.VERTICAL)
@@ -526,13 +527,14 @@ class star_client(wx.Frame):
 			self.render_output_path_tmp = tempfile.TemporaryDirectory()
 			self.render_output_path = self.render_output_path_tmp.name
 		if (not "clear_output_on_render" in config or config.as_bool("clear_output_on_render")) and self.render_title.Value:
-			[os.remove(i) for i in glob.glob(os.path.join(config.get("render_path", os.path.join(os.getcwd(), "output")), self.render_title.Value, "*.wav"))]
+			[os.remove(i) for i in glob.glob(os.path.join(config.get("render_path", os.path.join(os.getcwd(), "output")), self.render_title.Value, "*.*"))]
 		self.render_btn.Label = "Cancel"
 		if selected_renderable_lines: renderable_lines = selected_renderable_lines
 		self.render_total = len(renderable_lines)
 		self.render_progress.Range = self.render_total
 		self.render_progress.Value = 0
 		self.render_progress.Show()
+		self.last_renderable_lines = renderable_lines
 		for l in renderable_lines:
 			if not self.render_total: return # render canceled
 			self.audiospeak(l[1], render_filename = l[0])
@@ -543,7 +545,7 @@ class star_client(wx.Frame):
 		if not canceled:
 			title = self.render_title.Value
 			if os.path.splitext(title)[1] in [".wav", ".mp3"]:
-				items = [i for i in glob.glob(os.path.join(self.render_output_path, "*.wav"))]
+				items = [os.path.join(self.render_output_path, i[0] + "." + self.speech_cache[i[1]]["extension"]) for i in self.last_renderable_lines]
 				combined = AudioSegment(data = b"", sample_width = 2, frame_rate = 44100, channels = 1)
 				for i in items:
 					if len(combined) > 0: combined += AudioSegment.silent(config.as_int("render_consolidated_silence") if "render_consolidated_silence" in config else 200)

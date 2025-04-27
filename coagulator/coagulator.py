@@ -16,8 +16,8 @@ import websockets
 import websockets.asyncio.server
 
 def g(): pass #globals
-g.provider_rev = 3
-g.user_rev = 3
+g.provider_rev = 4
+g.user_rev = 4
 g.next_client_id = 1
 g.next_web_id = 10000000
 

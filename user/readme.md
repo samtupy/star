@@ -1,5 +1,5 @@
 # STAR user client documentation
-The STAR user client is the frontend interface to this relay system. With it, you can connect to any coagulator you know about before synthesizing text into either audio that is played through speakers or rendered to audio files.
+The STAR user client is the frontend interface to this text to speech relay system. With it, you can connect to any coagulator you know about before synthesizing text into audio that can either be played through speakers or rendered to audio files.
 
 If you are trying to learn how to host a coagulator so that your friends can share voices, then this [coagulator quickstart guide](https://github.com/samtupy/star/blob/main/coagulator/readme.md) on STAR's github will help you do that.
 
@@ -137,6 +137,22 @@ Each provider has a --configure command line option. So if you run balcony.exe -
 You can then run balcony.exe or sam.exe standalone and the voices will be shared using the set configuration. It's common to create shortcuts to the providers and place them in the shell:startup location accessible from the run dialog, causing voices to be shared to a list of coagulators on system boot.
 
 ## Change log
+### Revision 4
+This update to STAR contains all changes to the project that have taken place over the last 4+ months, including a slightly better visual UI, more providers, the coagulator web frontend, security/stability and bugfixes.
+* Improves the visual layout for the user client UI, it's still very likely quite far from perfect.
+* New providers in the STAR source package: bestspeech / Keynote Gold, openai, elevenlabs, and googlecloud.
+* Though it still needs work, at least somewhat improved the consolidated render feature. Now at least all the clips get rendered and in order too, though it's still a bit slow and has weird resampling.
+* The coagulator now provides an http frontend and API as a lightweight alternative to the STAR client.
+* Fixed a bug in the balcony provider which could cause text containing quotes to be output through speakers!
+* Major provider stability improvements, from the ability to specify maximum concurrent requests to vastly improved synthesis cancelation to general robustness including 10mb default max packet size. Before this update, providers would easily crash if too much text was fed to it. Now they handle that situation much more gracefully.
+* Fix bug in user client which was causing render complete noise to be played on synthesis error.
+* The STAR repository now includes a script which requests permission for macsay to be able to access and provide your MacOS personal voices!
+* STAR can now handle audio in formats other than wav when required. For example some cloud services actually offer the best sounding quality as mp3 or vorbis, and it would just be a waste of bandwidth to deceptively decode to wav before providing.
+* Implemented default pitch and rate functionality into the provider, sets macsay's default rate to 195wpm.
+* Minor provider code cleanup, including reducing very noisy error output when connections can't be established.
+* Fixed user client not reporting synthesis errors sent from a provider.
+* Fixed broken SAPI4 voice selection when a SAPI4 and SAPI5 voice existed with the same name.
+* Minor documentation updates including correcting a misdocumented keyboard shortcut.
 ### Revision 3
 This is a major update to STAR which includes a complete user client rewrite and consequently the introduction of several useful features.
 * The user client was completely rewritten from scratch in python and WX Widgets, meaning that though feedback must still be gathered to make it look right or even to insure that controls are visible at all, the user client should soon  be able to be used without a screen reader within a couple of revisions!
