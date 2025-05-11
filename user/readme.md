@@ -75,6 +75,17 @@ A common issue involves selecting the appropriate/desired voice based on a simil
 
 ```2.david: Hi, I am the second david!```
 
+### Selecting voice from a certain user
+Sometimes, it might happen that 2 users have a connected voice with the exact same name but that are either a different version of a voice or maybe even a different voice itself. By default when this happens, STAR has no way to know that there are any differences in the voices, and thus it would be impossible to consistently choose what one to use. While you could set a voice alias in the provider to get around this, it is also possible to just select what user a voice comes from in the script itself.
+
+If a script contains a line such as:
+
+```jonathan/alex: Hi, I'm Alex from Jonathan's computer!```
+
+Only voices called alex that are being provided by jonathan's user account will be searched.
+
+Basically, if a voice identifier begins with a username and then a slash, only voices from that user will be considered. If either an invalid username or a voice that does not exist for that user is given in the script, the standard "failed to vind provider for voice" error will be thrown.
+
 ### Voice aliases
 The next great feature supported in these scripts is voice aliases or character names. This allows you to refer to a voice by a shorthand identifier instead of by either a full voice name or a numeric identifier which might change based on what voices are connected. If the first non-whitespace character on a line begins with a verticle bar (|), the line is treated as extra metadata instead of as a speech line. The only currently supported metadata is the definition of a voice alias. For example, consider this script:
 
