@@ -44,7 +44,7 @@ def find_provider_for_voice(voice):
 	if not voice:
 		return voice, None
 	voice = voice.strip()
-	user = ""
+	user = None
 	if "/" in voice: user, delim, voice = voice.partition("/")
 	voice = voice.lower()
 	instance = 1
@@ -55,7 +55,7 @@ def find_provider_for_voice(voice):
 	for v in sorted(g.voices, key=len):
 		choices = list(g.voices[v])
 		for c in list(choices):
-			if getattr(g.clients[c]["ws"], "username", "") != user: choices.remove(c)
+			if user and getattr(g.clients[c]["ws"], "username") != user: choices.remove(c)
 		if len(choices) < 1: continue
 		if re.search(r"\b" + voice + r"\b", v.lower()):
 			if instance == found:
