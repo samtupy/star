@@ -292,7 +292,7 @@ class star_client(wx.Frame):
 		wx.StaticText(self.main_panel, -1, "&Voices")
 		self.voices_list = VirtualSmartList(parent = self.main_panel, style = wx.LC_REPORT | wx.LC_SINGLE_SEL, get_virtual_item = lambda v: self.voices[v], update_cache = lambda v_from, v_to: self.voices[v_from:v_to + 1])
 		self.voices_list.SetLabel("Voices")
-		self.voices_list.set_columns([Column(title = "voice name", model_field = "name", width = 100)])
+		self.voices_list.set_columns([Column(title = "voice name", model_field = "name", width = 300)])
 		self.voices_list.control.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_preview_voice)
 		copy_voicename_id = wx.NewIdRef()
 		self.voice_find_id = wx.NewIdRef()
