@@ -149,7 +149,7 @@ async def on_client_disconnect(ws, client_id):
 		lost_voice = False
 		for v in list(g.voices):
 			if client_id in g.voices[v]:
-				g.voices[v].remove(client_id)
+				while client_id in g.voices[v]: g.voices[v].remove(client_id)
 				if len(g.voices[v]) < 1:
 					del g.voices[v]
 					lost_voice = True
