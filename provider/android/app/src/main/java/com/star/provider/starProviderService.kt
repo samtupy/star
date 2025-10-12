@@ -44,7 +44,6 @@ import kotlin.math.pow
 import com.star.provider.R
 
 
-// --- Listener Interfaces ---
 interface ServiceStateListener {
     fun onStatusUpdate(status: String, isRunning: Boolean)
 }
@@ -53,7 +52,6 @@ interface ServiceLogListener {
     fun onLogMessage(message: String)
 }
 
-// --- Data Classes ---
 private data class CoagulatorConnection(
     val hostUrl: String,
     var webSocket: WebSocket? = null,
@@ -284,7 +282,6 @@ class StarProviderService : Service() {
         }
     }
 
-    // --- Voice & Engine Configuration ---
     fun saveAndReloadEngineConfigs(newConfigs: Map<String, Boolean>) {
         // 1. Save the new configuration. This is now the single source of truth.
         sharedPreferences.edit().putString(ENGINE_CONFIG_PREF_KEY, JSONObject(newConfigs as Map<*, *>).toString()).apply()
@@ -296,7 +293,6 @@ class StarProviderService : Service() {
             logToActivity("Engine refresh complete. Repopulating voice list from active engines.")
             populateAvailableVoices() // This will now use the new, correct list of running engines.
 
-            // --- START OF FIX ---
             // The original code re-registered on the existing connection, which the Python
             // coagulator does not handle as a "refresh". We must force a disconnect/reconnect.
             logToActivity("Forcing reconnection to servers to apply new engine configuration.")
@@ -311,7 +307,6 @@ class StarProviderService : Service() {
                     connectWebSocket(hostUrl)
                 }
             }
-            // --- END OF FIX ---
         }
 
         // 3. SHUT DOWN ALL currently running TTS engines. This is the crucial "tear down" step.
@@ -368,7 +363,8 @@ class StarProviderService : Service() {
                 tts.voices?.mapNotNull { voice ->
                     val configKey = "$engineName:${voice.name}"
                     val persisted = persistedConfigs[configKey]
-                    val defaultAlias = "${engineName.split(".").lastOrNull() ?: "eng"}_${voice.name}".replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+                    val shortEngineName = getShortEngineName(engineName)
+                    val defaultAlias = "${shortEngineName}_${voice.name}".replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
                     DialogVoiceInfo(voice.name, engineName, voice.locale, voice.isNetworkConnectionRequired,
                         persisted?.starLabel ?: defaultAlias, persisted?.isEnabled ?: true)
                 } ?: emptyList()
@@ -386,7 +382,6 @@ class StarProviderService : Service() {
         // First, update the service's internal list of what voices *should* be active.
         populateAvailableVoices()
         
-        // --- START OF FIX ---
         // The original code re-registered on the existing connection. However, the Python
         // coagulator does not clear the old voice list on re-registration; it only
         // clears voices when a provider disconnects.
@@ -413,7 +408,6 @@ class StarProviderService : Service() {
                 connectWebSocket(hostUrl)
             }
         }
-        // --- END OF FIX ---
     }
 
     private fun loadVoiceConfigurations(): List<PersistedVoiceConfig> {
@@ -450,6 +444,17 @@ class StarProviderService : Service() {
         return configs
     }
 
+    private fun getShortEngineName(engineName: String): String {
+        return when {
+            engineName.contains("google") -> "google"
+            engineName.contains("rhvoice") -> "rhvoice"
+            engineName.contains("espeak") -> "espeak"
+            engineName.contains("dectalk") -> "dectalk"
+            engineName.contains("samsung") -> "samsung"
+            else -> engineName.split(".").lastOrNull() ?: "eng"
+        }
+    }
+
     private fun populateAvailableVoices() {
         allSystemVoices.clear()
         val persistedVoiceConfigs = loadVoiceConfigurations().associateBy { "${it.engineName}:${it.originalName}" }
@@ -463,7 +468,8 @@ class StarProviderService : Service() {
                 tts.voices?.forEach { voice ->
                     val configKey = "$engineName:${voice.name}"
                     val persistedConfig = persistedVoiceConfigs[configKey]
-                    val defaultStarLabel = "${engineName.split(".").lastOrNull() ?: "eng"}_${voice.name}".replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
+                    val shortEngineName = getShortEngineName(engineName)
+                    val defaultStarLabel = "${shortEngineName}_${voice.name}".replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
                     val starLabel = persistedConfig?.starLabel ?: defaultStarLabel
                     val isEnabled = persistedConfig?.isEnabled ?: true
                     val voiceConfig = StarVoiceConfig(originalName = voice.name, engineName = engineName, androidVoice = voice, starLabel = starLabel, isEnabled = isEnabled)
