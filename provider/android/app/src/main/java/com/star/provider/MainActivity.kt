@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity(), ServiceStateListener, ServiceLogListen
 							saveUrls()
 						}
 					},
-					onRemoveServerUrl = { url -> _serverUrls.remove(url); saveUrls() },
+				onRemoveServerUrl = { url -> _serverUrls.remove(url); saveUrls() },
 					providerName = _providerName.value,
 					onProviderNameChange = { _providerName.value = it; sharedPreferences.edit().putString(KEY_PROVIDER_NAME, it).apply() },
 					currentStatus = _currentStatus.value,
@@ -238,62 +238,68 @@ fun StarProviderScreen(
 	onStartStopClick: () -> Unit, onConfigureVoicesClick: () -> Unit, onConfigureEnginesClick: () -> Unit
 ) {
 	val logScrollState = rememberScrollState()
-	val columnScrollState = rememberScrollState()
-	LaunchedEffect(logMessages) { logScrollState.animateScrollTo(logScrollState.maxValue) }
 
 	Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-		Column(
+		LazyColumn(
 			modifier = Modifier
 					.fillMaxSize()
-					.padding(16.dp)
-					.verticalScroll(columnScrollState),
+					.padding(16.dp),
 			horizontalAlignment = Alignment.CenterHorizontally
 		) {
-			Text("STAR Android TTS Provider", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
+			item { Text("STAR Android TTS Provider", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp)) }
 
-			Text("Coagulator Hosts", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
-			Spacer(Modifier.height(8.dp))
-			Column(Modifier.fillMaxWidth().heightIn(max = 150.dp)) {
-				LazyColumn(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.2f)).padding(horizontal = 8.dp).fillMaxWidth()) {
-					items(serverUrls, key = { it }) { url ->
-						Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-							Text(url, modifier = Modifier.weight(1f))
-							IconButton(onClick = { onRemoveServerUrl(url) }, modifier = Modifier.size(36.dp)) {
-								Icon(Icons.Default.Delete, contentDescription = "Remove host")
-							}
-						}
-						HorizontalDivider()
+			item { Text("Coagulator Hosts", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
+				Spacer(Modifier.height(8.dp))
+			}
+
+			items(serverUrls, key = { it }) { url ->
+				Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.2f))) {
+					Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+						Text(url, modifier = Modifier.weight(1f))
+						IconButton(onClick = { onRemoveServerUrl(url) }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Delete, contentDescription = "Remove host") }
 					}
+					HorizontalDivider()
 				}
 			}
-			var newHostUrl by remember { mutableStateOf("ws://") }
-			val focusManager = LocalFocusManager.current
-			OutlinedTextField(
-				value = newHostUrl, onValueChange = { newHostUrl = it },
-				label = { Text("Add new host URL") }, singleLine = true,
-				keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-				keyboardActions = KeyboardActions(onDone = { onAddServerUrl(newHostUrl); newHostUrl="ws://"; focusManager.clearFocus() }),
-				modifier = Modifier.fillMaxWidth().padding(top=4.dp),
-				trailingIcon = { IconButton(onClick = { onAddServerUrl(newHostUrl); newHostUrl="ws://"; focusManager.clearFocus() }) { Icon(Icons.Default.Add, "Add Host") } }
-			)
-			Spacer(modifier = Modifier.height(16.dp))
 
-			OutlinedTextField(value = providerName, onValueChange = onProviderNameChange, label = { Text("Provider Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-			Spacer(modifier = Modifier.height(16.dp))
-
-			Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-				Button(onClick = onStartStopClick, modifier = Modifier.weight(1f)) {
-					Text(if (isServiceRunning) "Stop Provider" else "Start Provider")
-				}
-				Spacer(Modifier.width(8.dp))
-				IconButton(onClick = onConfigureEnginesClick) { Icon(Icons.Filled.Build, contentDescription = "Configure Engines") }
-				IconButton(onClick = onConfigureVoicesClick) { Icon(Icons.Filled.Settings, contentDescription = "Configure Voices") }
+			item {
+				var newHostUrl by remember { mutableStateOf("ws://") }
+				val focusManager = LocalFocusManager.current
+				OutlinedTextField(
+					value = newHostUrl, onValueChange = { newHostUrl = it },
+					label = { Text("Add new host URL") }, singleLine = true,
+					keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+					keyboardActions = KeyboardActions(onDone = { onAddServerUrl(newHostUrl); newHostUrl="ws://"; focusManager.clearFocus() }),
+					modifier = Modifier.fillMaxWidth().padding(top=4.dp),
+					trailingIcon = { IconButton(onClick = { onAddServerUrl(newHostUrl); newHostUrl="ws://"; focusManager.clearFocus() }) { Icon(Icons.Default.Add, "Add Host") } }
+				)
+				Spacer(modifier = Modifier.height(16.dp))
 			}
 
-			Spacer(modifier = Modifier.height(16.dp)); Text(currentStatus, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth())
-			Spacer(modifier = Modifier.height(16.dp)); Text("Logs:", style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth())
-			Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)).padding(8.dp)) {
-				Text(text = logMessages, modifier = Modifier.fillMaxSize().verticalScroll(logScrollState), style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp))
+			item {
+				OutlinedTextField(value = providerName, onValueChange = onProviderNameChange, label = { Text("Provider Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+				Spacer(modifier = Modifier.height(16.dp))
+			}
+
+			item {
+				Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+					Button(onClick = onStartStopClick, modifier = Modifier.weight(1f)) { Text(if (isServiceRunning) "Stop Provider" else "Start Provider") }
+					Spacer(Modifier.width(8.dp))
+					IconButton(onClick = onConfigureEnginesClick) { Icon(Icons.Filled.Build, contentDescription = "Configure Engines") }
+					IconButton(onClick = onConfigureVoicesClick) { Icon(Icons.Filled.Settings, contentDescription = "Configure Voices") }
+				}
+				Spacer(modifier = Modifier.height(16.dp))
+			}
+
+			item {
+				Text(currentStatus, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth())
+				Spacer(modifier = Modifier.height(16.dp))
+				Text("Logs:", style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth())
+			}
+
+			item {
+				Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)).padding(8.dp)) { Text(text = logMessages, modifier = Modifier.fillMaxSize().verticalScroll(logScrollState), style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp))
+				}
 			}
 		}
 	}
@@ -318,28 +324,28 @@ fun EngineConfigurationDialog(onDismiss: () -> Unit, starProviderService: StarPr
 				Text("Configure TTS Engines", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
 				
 				if (isLoading) {
-					Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+					Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 				} else if (engineConfigItems.isEmpty()) {
-					Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+					Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
 						Text("No TTS engines found or service not ready.", modifier = Modifier.padding(16.dp))
 					}
 				} else {
-					LazyColumn(modifier = Modifier.fillMaxSize().weight(1f)) {
+					LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
 						items(engineConfigItems, key = { it.packageName }) { item ->
 							Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
 								Column(modifier = Modifier.weight(1f)) {
 									Text(item.label, style = MaterialTheme.typography.bodyLarge)
 									Text(item.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 								}
-								Spacer(modifier = Modifier.width(8.dp))
-								Switch(
-									checked = item.isEnabled,
-									onCheckedChange = { newEnabled ->
-										engineConfigItems = engineConfigItems.map {
-											if (it.packageName == item.packageName) it.copy(isEnabled = newEnabled) else it
-										}
+							Spacer(modifier = Modifier.width(8.dp))
+							Switch(
+								checked = item.isEnabled,
+								onCheckedChange = { newEnabled ->
+									engineConfigItems = engineConfigItems.map {
+										if (it.packageName == item.packageName) it.copy(isEnabled = newEnabled) else it
 									}
-								)
+								}
+							)
 							}
 							HorizontalDivider()
 						}
@@ -354,9 +360,7 @@ fun EngineConfigurationDialog(onDismiss: () -> Unit, starProviderService: StarPr
 						val configsToSave = engineConfigItems.associate { it.packageName to it.isEnabled }
 						starProviderService?.saveAndReloadEngineConfigs(configsToSave)
 						onDismiss()
-					}, enabled = !isLoading && engineConfigItems.isNotEmpty()) {
-						Text("Save & Apply")
-					}
+					}, enabled = !isLoading && engineConfigItems.isNotEmpty()) { Text("Save & Apply") }
 				}
 			}
 		}
@@ -408,19 +412,19 @@ fun VoiceConfigurationDialog(
 				Text("Configure Voices", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
 				
 				if (isLoading) {
-					Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+					Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 				} else if (voiceConfigItems.isEmpty()) {
-					Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+					Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
 						Text("No voices available. Check TTS engine configuration or logs.", modifier = Modifier.padding(16.dp))
 					}
 				} else {
-					LazyColumn(modifier = Modifier.fillMaxSize().weight(1f)) {
+					LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
 						items(voiceConfigItems, key = { it.id }) { item ->
 							VoiceConfigRow(
 								item = item,
 								onAliasChange = { newAlias -> voiceConfigItems = voiceConfigItems.map { if (it.id == item.id) it.copy(alias = newAlias) else it } },
-								onEnabledChange = { newEnabled -> voiceConfigItems = voiceConfigItems.map { if (it.id == item.id) it.copy(isEnabled = newEnabled) else it } }
-							)
+							onEnabledChange = { newEnabled -> voiceConfigItems = voiceConfigItems.map { if (it.id == item.id) it.copy(isEnabled = newEnabled) else it } }
+						)
 							HorizontalDivider()
 						}
 					}
@@ -433,18 +437,18 @@ fun VoiceConfigurationDialog(
 					Button(
 						onClick = {
 							val configsToSave = voiceConfigItems.mapNotNull { item ->
-								val idParts = item.id.split(":", limit = 2)
-								if (idParts.size == 2) {
-									PersistedVoiceConfig(originalName = idParts[1], engineName = idParts[0], starLabel = item.alias, isEnabled = item.isEnabled)
-								} else {
-									Log.w("MainActivity", "Skipping invalid voice config item with ID: ${item.id}")
-									null
+									val idParts = item.id.split(":", limit = 2)
+									if (idParts.size == 2) {
+										PersistedVoiceConfig(originalName = idParts[1], engineName = idParts[0], starLabel = item.alias, isEnabled = item.isEnabled)
+									} else {
+										Log.w("MainActivity", "Skipping invalid voice config item with ID: ${item.id}")
+										null
+									}
 								}
-							}
 							starProviderService?.savePersistedVoiceConfigs(configsToSave)
 							onDismiss()
 						},
-						enabled = !isLoading && voiceConfigItems.isNotEmpty()
+					enabled = !isLoading && voiceConfigItems.isNotEmpty()
 					) { Text("Save & Apply") }
 				}
 			}
