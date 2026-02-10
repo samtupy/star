@@ -40,12 +40,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.star.provider.ui.theme.StarProviderTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import com.star.provider.ServiceStateListener
 import com.star.provider.ServiceLogListener
@@ -313,7 +318,9 @@ fun EngineConfigurationDialog(onDismiss: () -> Unit, starProviderService: StarPr
 	LaunchedEffect(starProviderService) {
 		isLoading = true
 		if (starProviderService != null) {
-			engineConfigItems = starProviderService.getSystemEnginesForConfiguration()
+			engineConfigItems = withContext(Dispatchers.IO) {
+				starProviderService.getSystemEnginesForConfiguration()
+			}
 		}
 		isLoading = false
 	}
@@ -330,26 +337,22 @@ fun EngineConfigurationDialog(onDismiss: () -> Unit, starProviderService: StarPr
 						Text("No TTS engines found or service not ready.", modifier = Modifier.padding(16.dp))
 					}
 				} else {
-					LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-						items(engineConfigItems, key = { it.packageName }) { item ->
-							Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-								Column(modifier = Modifier.weight(1f)) {
-									Text(item.label, style = MaterialTheme.typography.bodyLarge)
-									Text(item.packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-								}
-							Spacer(modifier = Modifier.width(8.dp))
-							Switch(
-								checked = item.isEnabled,
-								onCheckedChange = { newEnabled ->
+					AndroidView(
+						modifier = Modifier.fillMaxWidth().weight(1f),
+						factory = { context ->
+							RecyclerView(context).apply {
+								layoutManager = LinearLayoutManager(context)
+								adapter = EngineAdapter(engineConfigItems) { pkg, isEnabled ->
 									engineConfigItems = engineConfigItems.map {
-										if (it.packageName == item.packageName) it.copy(isEnabled = newEnabled) else it
+										if (it.packageName == pkg) it.copy(isEnabled = isEnabled) else it
 									}
 								}
-							)
 							}
-							HorizontalDivider()
+						},
+						update = { recyclerView ->
+							(recyclerView.adapter as? EngineAdapter)?.updateData(engineConfigItems)
 						}
-					}
+					)
 				}
 
 				Spacer(modifier = Modifier.height(16.dp))
@@ -390,7 +393,9 @@ fun VoiceConfigurationDialog(
 	LaunchedEffect(starProviderService) {
 		isLoading = true
 		if (starProviderService != null) {
-			val systemVoicesData = starProviderService.getSystemVoicesForConfiguration()
+			val systemVoicesData = withContext(Dispatchers.IO) {
+				starProviderService.getSystemVoicesForConfiguration()
+			}
 			voiceConfigItems = systemVoicesData.map { dialogInfo ->
 				val engineShortName = dialogInfo.engineName.split('.').lastOrNull() ?: dialogInfo.engineName
 				VoiceConfigItem(
@@ -418,16 +423,26 @@ fun VoiceConfigurationDialog(
 						Text("No voices available. Check TTS engine configuration or logs.", modifier = Modifier.padding(16.dp))
 					}
 				} else {
-					LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-						items(voiceConfigItems, key = { it.id }) { item ->
-							VoiceConfigRow(
-								item = item,
-								onAliasChange = { newAlias -> voiceConfigItems = voiceConfigItems.map { if (it.id == item.id) it.copy(alias = newAlias) else it } },
-							onEnabledChange = { newEnabled -> voiceConfigItems = voiceConfigItems.map { if (it.id == item.id) it.copy(isEnabled = newEnabled) else it } }
-						)
-							HorizontalDivider()
+					AndroidView(
+						modifier = Modifier.fillMaxWidth().weight(1f),
+						factory = { context ->
+							RecyclerView(context).apply {
+								layoutManager = LinearLayoutManager(context)
+								adapter = VoiceAdapter(
+									voiceConfigItems,
+									onAliasChange = { id, newAlias ->
+										voiceConfigItems = voiceConfigItems.map { if (it.id == id) it.copy(alias = newAlias) else it }
+									},
+									onEnabledChange = { id, isEnabled ->
+										voiceConfigItems = voiceConfigItems.map { if (it.id == id) it.copy(isEnabled = isEnabled) else it }
+									}
+								)
+							}
+						},
+						update = { recyclerView ->
+							(recyclerView.adapter as? VoiceAdapter)?.updateData(voiceConfigItems)
 						}
-					}
+					)
 				}
 
 				Spacer(modifier = Modifier.height(16.dp))
@@ -453,29 +468,5 @@ fun VoiceConfigurationDialog(
 				}
 			}
 		}
-	}
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun VoiceConfigRow(item: VoiceConfigItem, onAliasChange: (String) -> Unit, onEnabledChange: (Boolean) -> Unit) {
-	Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-		Column(modifier = Modifier.weight(1f)) {
-			Text(item.displayName, style = MaterialTheme.typography.bodyMedium)
-			OutlinedTextField(
-				value = item.alias,
-				onValueChange = onAliasChange,
-				label = { Text("Alias") },
-				singleLine = true,
-				modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-				textStyle = TextStyle(fontSize = 14.sp)
-			)
-		}
-		Spacer(modifier = Modifier.width(8.dp))
-		Switch(
-			checked = item.isEnabled, 
-			onCheckedChange = onEnabledChange,
-			modifier = Modifier.semantics { contentDescription = "Enable voice ${item.alias.ifBlank { item.displayName }}" }
-		)
 	}
 }

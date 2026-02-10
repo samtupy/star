@@ -68,6 +68,9 @@ android {
 dependencies {
     // Core Android & Jetpack Compose Dependencies (from version catalog)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.material)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom)) // Ensure this BOM version is up-to-date

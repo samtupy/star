@@ -113,6 +113,7 @@ class StarProviderService : Service() {
 	private val providerRevision = 4
 	private var currentStatus: String = "Service Idle"
 	private var isServiceCurrentlyRunning = false
+	private var isStartedByCommand = false // Track if Start was clicked
 	private val canceledRequests = ConcurrentHashMap.newKeySet<String>()
 	private var isManuallyStopped = false
 	private val stateListeners = CopyOnWriteArrayList<ServiceStateListener>()
@@ -167,6 +168,7 @@ class StarProviderService : Service() {
 	override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 		Log.d("StarProviderService", "onStartCommand received")
 		isManuallyStopped = false
+		isStartedByCommand = true
 		val hostUrls = intent?.getStringArrayListExtra(EXTRA_SERVER_URLS)
 		providerNameInternal = intent?.getStringExtra("PROVIDER_NAME") ?: "MyAndroidTTS"
 
@@ -209,7 +211,7 @@ class StarProviderService : Service() {
 		if (isTtsReady()) {
 			connections.keys.forEach { connectWebSocket(it) }
 		} else {
-			logToFile("TTS not ready, connections will be attempted after initialization.")
+			logToFile("TTS not ready yet. Connections will trigger automatically when initialization finishes.")
 		}
 		return START_STICKY
 	}
@@ -465,6 +467,20 @@ class StarProviderService : Service() {
 		}
 		activeStarVoices = finalActiveVoices
 		logToFile(voiceDetailsLog.trim())
+		
+		if (isStartedByCommand) {
+			connections.keys.forEach { hostUrl ->
+				val conn = connections[hostUrl]
+				if (conn?.webSocket == null) {
+					logToFile("TTS is now ready. Starting pending connection for $hostUrl")
+					connectWebSocket(hostUrl)
+				} else {
+					logToFile("Voices updated. Re-registering with $hostUrl")
+					registerWithCoagulator(conn.webSocket!!)
+				}
+			}
+		}
+
 		if (activeStarVoices.isEmpty()) {
 			logToActivity("Warning: No active TTS voices found or configured.")
 		}
@@ -689,6 +705,7 @@ class StarProviderService : Service() {
 
 	internal fun stopServiceInternal() {
 		isManuallyStopped = true
+		isStartedByCommand = false
 		logToActivity("Service stop requested by MainActivity.")
 		connections.values.forEach { it.isManuallyStopped = true; it.handler.removeCallbacksAndMessages(null); cleanupWebSocket(it.hostUrl) }
 		connections.clear(); ttsEngines.values.forEach { try { it.stop() } catch (e: Exception) { /* ignore */ } }
