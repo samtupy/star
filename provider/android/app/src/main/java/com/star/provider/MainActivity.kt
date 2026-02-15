@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,11 +35,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.ScrollAxisRange
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.horizontalScrollAxisRange
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.verticalScrollAxisRange
 import androidx.compose.ui.text.TextStyle
@@ -264,10 +269,58 @@ fun StarProviderScreen(
 			}
 
 			items(serverUrls, key = { it }) { url ->
-				Column(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.2f))) {
-					Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-						Text(url, modifier = Modifier.weight(1f))
-						IconButton(onClick = { onRemoveServerUrl(url) }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Delete, contentDescription = "Remove host") }
+				var showEditDialog by remember { mutableStateOf(false) }
+
+				if (showEditDialog) {
+					EditHostDialog(
+						currentUrl = url,
+						onDismiss = { showEditDialog = false },
+						onConfirm = { newUrl ->
+							if (newUrl.isNotBlank() && newUrl != url) {
+								onRemoveServerUrl(url)
+								onAddServerUrl(newUrl)
+							}
+							showEditDialog = false
+						}
+					)
+				}
+
+				Column(
+					modifier = Modifier
+						.fillMaxWidth()
+						.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+						.clickable(
+							onClickLabel = "edit info",
+							onClick = { showEditDialog = true }
+						)
+						.semantics {
+							contentDescription = "Host $url"
+							customActions = listOf(
+								CustomAccessibilityAction("Remove") {
+									onRemoveServerUrl(url)
+									true
+								}
+							)
+						}
+				) {
+					Row(
+						verticalAlignment = Alignment.CenterVertically,
+						modifier = Modifier
+							.padding(horizontal = 8.dp, vertical = 4.dp)
+							.fillMaxWidth()
+							.clearAndSetSemantics { }
+					) {
+						Text(
+							text = url,
+							modifier = Modifier
+								.weight(1f)
+								.padding(vertical = 12.dp)
+						)
+						IconButton(
+							onClick = { onRemoveServerUrl(url) }
+						) {
+							Icon(Icons.Default.Delete, contentDescription = null)
+						}
 					}
 					HorizontalDivider()
 				}
@@ -314,6 +367,28 @@ fun StarProviderScreen(
 			}
 		}
 	}
+}
+
+@Composable
+fun EditHostDialog(currentUrl: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+	var editedUrl by remember { mutableStateOf(currentUrl) }
+	AlertDialog(
+		onDismissRequest = onDismiss,
+		title = { Text("Edit Host URL") },
+		text = {
+			OutlinedTextField(
+				value = editedUrl,
+				onValueChange = { editedUrl = it },
+				label = { Text("Host URL") },
+				singleLine = true,
+				modifier = Modifier.fillMaxWidth(),
+				keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+				keyboardActions = KeyboardActions(onDone = { onConfirm(editedUrl) })
+			)
+		},
+		confirmButton = { Button(onClick = { onConfirm(editedUrl) }) { Text("Save") } },
+		dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+	)
 }
 
 @Composable
@@ -484,7 +559,10 @@ fun VoiceConfigurationDialog(
 							},
 						state = listState
 					) {
-						itemsIndexed(voiceConfigItems) { index, voiceItem ->
+						itemsIndexed(
+							items = voiceConfigItems,
+							key = { _, item -> item.id }
+						) { index, voiceItem ->
 							VoiceItem(
 								item = voiceItem,
 								onAliasChange = { id, newAlias ->
