@@ -16,6 +16,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,8 +32,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
+import androidx.compose.ui.semantics.ScrollAxisRange
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.horizontalScrollAxisRange
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.verticalScrollAxisRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,11 +49,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.star.provider.ui.theme.StarProviderTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -337,22 +343,33 @@ fun EngineConfigurationDialog(onDismiss: () -> Unit, starProviderService: StarPr
 						Text("No TTS engines found or service not ready.", modifier = Modifier.padding(16.dp))
 					}
 				} else {
-					AndroidView(
-						modifier = Modifier.fillMaxWidth().weight(1f),
-						factory = { context ->
-							RecyclerView(context).apply {
-								layoutManager = LinearLayoutManager(context)
-								adapter = EngineAdapter(engineConfigItems) { pkg, isEnabled ->
+					val listState = rememberLazyListState()
+					LazyColumn(
+						modifier = Modifier
+							.fillMaxWidth()
+							.weight(1f)
+							.semantics {
+								collectionInfo = CollectionInfo(rowCount = engineConfigItems.size, columnCount = 1)
+								verticalScrollAxisRange = ScrollAxisRange(
+									value = { listState.firstVisibleItemIndex.toFloat() },
+									maxValue = { engineConfigItems.size.toFloat() }
+								)
+								horizontalScrollAxisRange = ScrollAxisRange(value = { 0f }, maxValue = { 0f })
+							},
+						state = listState
+					) {
+						itemsIndexed(engineConfigItems) { index, engine ->
+							EngineItem(
+								engine = engine,
+								onEnabledChange = { pkg, isEnabled ->
 									engineConfigItems = engineConfigItems.map {
 										if (it.packageName == pkg) it.copy(isEnabled = isEnabled) else it
 									}
-								}
-							}
-						},
-						update = { recyclerView ->
-							(recyclerView.adapter as? EngineAdapter)?.updateData(engineConfigItems)
+								},
+								index = index
+							)
 						}
-					)
+					}
 				}
 
 				Spacer(modifier = Modifier.height(16.dp))
@@ -367,6 +384,35 @@ fun EngineConfigurationDialog(onDismiss: () -> Unit, starProviderService: StarPr
 				}
 			}
 		}
+	}
+}
+
+@Composable
+fun EngineItem(engine: DialogEngineInfo, onEnabledChange: (String, Boolean) -> Unit, index: Int) {
+	Column(
+		modifier = Modifier
+			.fillMaxWidth()
+			.semantics {
+				collectionItemInfo = CollectionItemInfo(rowIndex = index, rowSpan = 1, columnIndex = 0, columnSpan = 1)
+			}
+	) {
+		Row(
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier
+				.padding(vertical = 8.dp, horizontal = 16.dp)
+				.fillMaxWidth()
+		) {
+			Column(modifier = Modifier.weight(1f)) {
+				Text(text = engine.label, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+				Text(text = engine.packageName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+			}
+			Switch(
+				checked = engine.isEnabled,
+				onCheckedChange = { onEnabledChange(engine.packageName, it) },
+				modifier = Modifier.padding(start = 8.dp)
+			)
+		}
+		HorizontalDivider()
 	}
 }
 
@@ -423,26 +469,34 @@ fun VoiceConfigurationDialog(
 						Text("No voices available. Check TTS engine configuration or logs.", modifier = Modifier.padding(16.dp))
 					}
 				} else {
-					AndroidView(
-						modifier = Modifier.fillMaxWidth().weight(1f),
-						factory = { context ->
-							RecyclerView(context).apply {
-								layoutManager = LinearLayoutManager(context)
-								adapter = VoiceAdapter(
-									voiceConfigItems,
-									onAliasChange = { id, newAlias ->
-										voiceConfigItems = voiceConfigItems.map { if (it.id == id) it.copy(alias = newAlias) else it }
-									},
-									onEnabledChange = { id, isEnabled ->
-										voiceConfigItems = voiceConfigItems.map { if (it.id == id) it.copy(isEnabled = isEnabled) else it }
-									}
+					val listState = rememberLazyListState()
+					LazyColumn(
+						modifier = Modifier
+							.fillMaxWidth()
+							.weight(1f)
+							.semantics {
+								collectionInfo = CollectionInfo(rowCount = voiceConfigItems.size, columnCount = 1)
+								verticalScrollAxisRange = ScrollAxisRange(
+									value = { listState.firstVisibleItemIndex.toFloat() },
+									maxValue = { voiceConfigItems.size.toFloat() }
 								)
-							}
-						},
-						update = { recyclerView ->
-							(recyclerView.adapter as? VoiceAdapter)?.updateData(voiceConfigItems)
+								horizontalScrollAxisRange = ScrollAxisRange(value = { 0f }, maxValue = { 0f })
+							},
+						state = listState
+					) {
+						itemsIndexed(voiceConfigItems) { index, voiceItem ->
+							VoiceItem(
+								item = voiceItem,
+								onAliasChange = { id, newAlias ->
+									voiceConfigItems = voiceConfigItems.map { if (it.id == id) it.copy(alias = newAlias) else it }
+								},
+								onEnabledChange = { id, isEnabled ->
+									voiceConfigItems = voiceConfigItems.map { if (it.id == id) it.copy(isEnabled = isEnabled) else it }
+								},
+								index = index
+							)
 						}
-					)
+					}
 				}
 
 				Spacer(modifier = Modifier.height(16.dp))
@@ -468,5 +522,50 @@ fun VoiceConfigurationDialog(
 				}
 			}
 		}
+	}
+}
+
+@Composable
+fun VoiceItem(
+	item: VoiceConfigItem,
+	onAliasChange: (String, String) -> Unit,
+	onEnabledChange: (String, Boolean) -> Unit,
+	index: Int
+) {
+	Column(
+		modifier = Modifier
+			.fillMaxWidth()
+			.semantics {
+				collectionItemInfo = CollectionItemInfo(rowIndex = index, rowSpan = 1, columnIndex = 0, columnSpan = 1)
+			}
+	) {
+		Row(
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier
+				.padding(vertical = 4.dp, horizontal = 16.dp)
+				.fillMaxWidth()
+		) {
+			Column(modifier = Modifier.weight(1f)) {
+				Text(text = item.displayName, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+				OutlinedTextField(
+					value = item.alias,
+					onValueChange = { onAliasChange(item.id, it) },
+					label = { Text("Alias") },
+					singleLine = true,
+					textStyle = TextStyle(fontSize = 14.sp),
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(top = 2.dp)
+				)
+			}
+			Switch(
+				checked = item.isEnabled,
+				onCheckedChange = { onEnabledChange(item.id, it) },
+				modifier = Modifier
+					.padding(start = 8.dp)
+					.semantics { contentDescription = "Enable voice ${item.alias.ifBlank { item.displayName }}" }
+			)
+		}
+		HorizontalDivider()
 	}
 }
