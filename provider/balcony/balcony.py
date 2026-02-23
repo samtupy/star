@@ -1,5 +1,5 @@
-import os
-import subprocess
+import os, subprocess, sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from provider import star_provider
 
 class balcony(star_provider):

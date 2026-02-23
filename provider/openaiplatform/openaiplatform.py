@@ -2,8 +2,10 @@
 # pip install openai
 
 import openai
-from provider import star_provider
 import wx
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from provider import star_provider
 
 class openaiplatform(star_provider):
 	def get_voices(self):

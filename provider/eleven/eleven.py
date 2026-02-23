@@ -1,7 +1,8 @@
 # pip install elevenlabs
 import traceback
 import wx
-
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from provider import star_provider
 from elevenlabs.client import ElevenLabs, AsyncElevenLabs
 from elevenlabs import VoiceSettings

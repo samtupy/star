@@ -1,4 +1,5 @@
-import subprocess
+import os, subprocess, sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from provider import star_provider
 
 voices = subprocess.run("say -v ?", shell = True, capture_output = True, text = True).stdout.split("\n")[:-1]

@@ -4,6 +4,8 @@ import asyncio
 import traceback
 import wx
 from google.cloud import texttospeech_v1
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from provider import star_provider
 
 class googlecloud(star_provider):

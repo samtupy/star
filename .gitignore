@@ -1,8 +1,8 @@
 __pycache__
 build
 dist
-provider/*.dll
-provider/*.exe
+provider/*/*.dll
+provider/*/*.exe
 user/output
 user/readme.html
 venv

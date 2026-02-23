@@ -69,9 +69,9 @@ exe_coagulator = EXE(
 )
 
 a_balcony = Analysis(
-	['provider\\balcony.py'],
+	['provider\\balcony\\balcony.py'],
 	pathex=[],
-	binaries=[("provider\\balcon.exe", ".")],
+	binaries=[("provider\\balcony\\balcon.exe", ".")],
 	datas=[],
 	hiddenimports=[],
 	hookspath=[],
@@ -103,9 +103,9 @@ exe_balcony = EXE(
 )
 
 a_sammy = Analysis(
-	['provider\\sammy.py'],
+	['provider\\sammy\\sammy.py'],
 	pathex=[],
-	binaries=[("provider\\sam.exe", ".")],
+	binaries=[("provider\\sammy\\sam.exe", ".")],
 	datas=[],
 	hiddenimports=[],
 	hookspath=[],
