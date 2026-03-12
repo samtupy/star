@@ -1,0 +1,51 @@
+[versions]
+agp = "8.6.0"
+kotlin = "1.9.10" # For Kotlin 1.9.0, a common Compose Compiler version is 1.5.1 or 1.5.2. Double check compatibility.
+# composeCompiler = "1.5.1" # Example: Add this line. Check compatibility with Kotlin 1.9.0
+coreKtx = "1.15.0"
+lifecycleRuntimeKtx = "2.8.7"
+activityCompose = "1.10.0"
+composeBom = "2024.04.01" # This BOM will manage versions for androidx-ui, -material3 etc.
+
+junit = "4.13.2"
+junitVersion = "1.2.1" # This is for androidx.test.ext:junit
+espressoCore = "3.6.1"
+appcompat = "1.7.0"
+recyclerview = "1.3.2"
+material = "1.12.0"
+
+# Added for STAR Provider
+okhttp = "4.12.0" # Or latest stable
+orgJson = "20231013" # Or latest stable
+
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" } # Version managed by BOM
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" } # Version managed by BOM
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" } # Version managed by BOM, for debug
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" } # Version managed by BOM
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" } # Version managed by BOM, for debug
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" } # Version managed by BOM, for androidTest
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" } # Version managed by BOM
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" } # For unit tests
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" } # For instrumented tests
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" } # For instrumented tests
+
+# Added for STAR Provider
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+# If you want to manage the compose compiler plugin explicitly via TOML (optional for modern setups)
+# kotlin-compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" } # Version usually same as kotlin plugin

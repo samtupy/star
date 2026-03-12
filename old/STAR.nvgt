@@ -1,11 +1,14 @@
-// This is the original STAR client written in NVGT. The initial reason that sparked a rewrite to python was that low vision rather than just blind users became interested in this program and wanted a proper GUI, also it just seemed more prudent to make this a purely python project and to let NVGT excelle at what it was intended for which was audio game design rather than utility programs.
-
 #include "form.nvgt"
 #include "ini.nvgt"
 #pragma asset audio
 #pragma asset "STAR.ini"
 
-atomic_bool program_exit = false, server_connected = true; // Initial loop will set server_connected to false when needed.
+// Global state variables
+atomic_bool program_exit = false, server_connected = true;
+int g_next_request_id = 1;
+dictionary request_map;
+
+// Thread-safe message queues
 class json_message_queue {
 	json_object@[] message_queue;
 	fast_mutex message_queue_mutex;
@@ -21,6 +24,7 @@ class json_message_queue {
 		return r;
 	}
 }
+
 class string_message_queue {
 	string[] message_queue;
 	fast_mutex message_queue_mutex;
@@ -36,33 +40,146 @@ class string_message_queue {
 		return r;
 	}
 }
+
 json_message_queue recv_queue;
 json_message_queue send_queue;
 string_message_queue audio_queue;
-
 web_socket@ ws;
+
+// --- Thread Logic ---
 void socket_thread() {
 	json_object parse_fail;
 	parse_fail["error"] = "received invalid message from server";
 	json_object lost_server;
 	lost_server["error"] = "lost server connection...";
+	
+	speak("Socket thread started");
+	
 	while (program_exit == false) {
 		try {
-			http_client cl(config.get_string("", "host", "127.0.0.1"), config.get_double("", "port", 7774));
-			http_request req(HTTP_GET, "/");
+			speak("Step 1: Parsing Config");
+			// Get raw URL
+			string full_url = config.get_string("", "host", "127.0.0.1");
+			if (full_url.is_empty()) {
+				speak("Error: Host is empty");
+				wait(1000);
+				continue;
+			}
+			
+			// URI Parsing Logic
+			string scheme = "ws";
+			string host = "127.0.0.1";
+			int port = 7774;
+			string username = "";
+			string password = "";
+			string path = "/";
+			
+			int scheme_idx = full_url.find("://");
+			if (scheme_idx > -1) {
+				scheme = full_url.substr(0, scheme_idx);
+				full_url = full_url.substr(scheme_idx + 3);
+			}
+			
+			int path_idx = full_url.find("/");
+			if (path_idx > -1) {
+				path = full_url.substr(path_idx);
+				full_url = full_url.substr(0, path_idx);
+			}
+			
+			int at_idx = full_url.find_last("@");
+			if (at_idx > -1) {
+				string user_info = full_url.substr(0, at_idx);
+				host = full_url.substr(at_idx + 1);
+				
+				int colon = user_info.find(":");
+				if (colon > -1) {
+					username = user_info.substr(0, colon);
+					password = user_info.substr(colon + 1);
+				} else {
+					username = user_info;
+				}
+				
+				username = url_decode(username);
+				password = url_decode(password);
+			} else {
+				host = full_url;
+			}
+			
+			if (host.starts_with("[")) {
+				int close_bracket = host.find("]");
+				if (close_bracket > -1) {
+					int port_colon = host.find(":", close_bracket);
+					if (port_colon > -1) {
+						port = parse_int(host.substr(port_colon + 1));
+						host = host.substr(0, close_bracket + 1);
+					}
+				}
+			} else {
+				int port_idx = host.find_last(":");
+				if (port_idx > -1) {
+					port = parse_int(host.substr(port_idx + 1));
+					host = host.substr(0, port_idx);
+				} else {
+					port = (scheme == "wss" ? 443 : 80);
+				}
+			}
+			
+			speak("Step 2: Connecting TCP");
+			http_client@ cl;
+			if (scheme == "wss") {
+				@cl = https_client(host, port);
+			} else {
+				@cl = http_client(host, port);
+			}
+			
+			if (@cl == null) {
+				speak("Error: Failed to create client");
+				wait(1000);
+				continue;
+			}
+
+			http_request req(HTTP_GET, path);
+			
+			if (username != "") {
+				string auth = username + ":" + password;
+				string encoded = string_base64_encode(auth);
+				req.set("Authorization", "Basic " + encoded);
+			}
+			
 			http_response resp;
+			
+			speak("Step 3: Websocket Handshake");
 			@ws = web_socket(cl, req, resp);
+			
+			if (@ws == null) {
+				speak("Error: Websocket creation returned null");
+				wait(2000);
+				continue;
+			}
+
+			speak("Step 4: Sending Handshake");
 			int flags;
-			ws.send_frame("""{"user": 2}""");
+			ws.send_frame("""{"user": 4}""");
+			
 			server_connected = true;
+			speak("Connected!");
+			
 			recv_queue.enqueue_message(json_object());
-			while(program_exit == false) {
+			
+			// --- Main Socket Loop (FIXED) ---
+			while (program_exit == false) {
+				// IMPORTANT: Wait here to yield CPU to the main thread so the window can draw
+				wait(5); 
+
 				json_object@ msg_to_send = null;
 				while ((@msg_to_send = send_queue.dequeue_message()) != null) {
-					ws.send_frame(msg_to_send.stringify());
+					if (@ws != null) ws.send_frame(msg_to_send.stringify());
 				}
-				if (ws.poll(timespan(5000), SOCKET_SELECT_READ)) {
+				
+				// Poll with a 1000 microsecond (1ms) timeout to be responsive but not blocking
+				if (@ws != null && ws.poll(timespan(1000), SOCKET_SELECT_READ)) {
 					string frame = ws.receive_frame(flags);
+					
 					if ((flags & WS_FRAME_OP_BITMASK) == WS_FRAME_OP_CLOSE or flags == 0) {
 						ws.shutdown();
 						break;
@@ -73,80 +190,85 @@ void socket_thread() {
 						audio_queue.enqueue_message(frame);
 						continue;
 					}
+					
 					json_object@ o;
 					try {
 						@o = parse_json(frame);
-					} catch { recv_queue.enqueue_message(parse_fail); }	
-					recv_queue.enqueue_message(o);
+					} catch {
+						recv_queue.enqueue_message(parse_fail);
+						continue;
+					}
+					if (@o != null) recv_queue.enqueue_message(o);
 				}
 			}
 		} catch {
-			lost_server["error"] = get_exception_info();
+			string err = get_exception_info();
+			speak("Crash: " + err);
+			lost_server["error"] = err;
 			if (server_connected == true) recv_queue.enqueue_message(lost_server);
 			server_connected = false;
+			wait(2000);
 		}
 	}
 }
 
+// --- Audio Handling ---
 void handle_audio(const string&in audio) {
-	if (audio.length() < 44) return;
+	if (audio.length() < 4) return;
 	datastream ds(audio.substr(0, 2));
-	string id = audio.substr(2, ds.read_uint16());
-	string[]@ id_parts = id.split("_");
-	bool rendering = parse_int(id_parts[1]) == render_ID;
-	if (rendering) {
-		render_count++;
-		if (render_count < item_count) play("progress", pitch = (float(render_count) / item_count * 100.0) + 60);
-		else {
-			play("complete");
-			form.set_caption(f_render, "&Render to wav");
-			item_count = render_count = 0;
+	uint16 meta_len = ds.read_uint16();
+	string meta_str = audio.substr(2, meta_len);
+	string actual_audio_data = audio.substr(2 + meta_len);
+	string req_id = "";
+	if (meta_str.starts_with("{")) {
+		json_object@ meta_json = parse_json(meta_str);
+		if (@meta_json != null) {
+			if (meta_json.exists("id")) req_id = string(meta_json["id"]);
 		}
-		if (!directory_exists("output")) directory_create("output");
-		file_put_contents("output/" + id_parts[2] + ".wav", audio.substr(id.length() + 2));
 	} else {
-		string data = audio.substr(id.length() + 2);
-		demo_cache.set(id_parts[1], data);
-		demo.close();
-		demo.push_memory(data, true);
-		demo.play();
+		req_id = meta_str;
 	}
+	string original_text;
+	if (request_map.exists(req_id)) {
+		request_map.get(req_id, original_text);
+		demo_cache.set(string_hash_sha256(original_text), actual_audio_data);
+		request_map.delete(req_id);
+	}
+	demo.close();
+	demo.load_memory(actual_audio_data);
+	demo.play();
 }
 
 void send_request(const string&in text, bool rendering) {
 	json_object result;
-	result["id"] = rendering? render_ID : string_hash_sha256(text, false);
-	result["user"] = 2;
-	string[]@ raw_lines = text.split("\r\n", false);
-	if (rendering) {
-		form.set_caption(f_render, "Cancel");
-		play("begin");
-	}
-	json_array lines;
-	for (uint i = 0; i < raw_lines.length(); i++) {
-		string l = raw_lines[i].trim_whitespace();
-		if (l.empty() or l.starts_with(";")) continue;
-		lines.add(l);
-	}
-	if (rendering) item_count = lines.length();
-	result["request"] = lines;
+	string this_id = "" + g_next_request_id;
+	g_next_request_id++;
+	request_map.set(this_id, text);
+	result["id"] = this_id;
+	result["user"] = 4;
+	result["command"] = "speak";
+	result["request"] = text;
 	send_queue.enqueue_message(result);
 }
+
 void starspeak(const string&in text) {
 	if (text.empty()) {
 		demo.close();
 		return;
 	}
-	string data = string_hash_sha256(text);
-	last_demoed_line = data;
-	if (demo_cache.exists(data)) {
-		data = string(demo_cache[data]);
+	string data_hash = string_hash_sha256(text);
+	last_demoed_line = data_hash;
+	if (demo_cache.exists(data_hash)) {
+		string data = string(demo_cache[data_hash]);
 		demo.close();
-		demo.push_memory(data, true);
+		demo.load_memory(data);
 		demo.play();
-	} else send_request(text, false);
+	} else {
+		send_request(text, false);
+	}
 }
 
+// --- UI and Globals ---
 audio_form form;
 sound demo;
 dictionary demo_cache;
@@ -156,6 +278,7 @@ int old_soundcard=0;
 int render_count = 0, item_count = 0;
 int f_voices, f_quickspeak, f_script, f_soundcard, f_render, f_stop, f_exit;
 int render_ID = 0x7fff;
+
 void setup_interface() {
 	show_window("STAR client");
 	wait(100);
@@ -164,14 +287,36 @@ void setup_interface() {
 	f_quickspeak = form.create_input_box("&quickspeak", multiline:true, multiline_enter:false);
 	f_script = form.create_input_box("enter &script", multiline:true);
 	f_soundcard = form.create_list("available &output devices");
-	for (uint i=0; i<sound_output_devices.length(); i++)
-		form.add_list_item(f_soundcard,sound_output_devices[i]);
+	
+	// FIX: correctly fetching device list
+	const string[]@ devices = get_sound_output_devices();
+	for (uint i=0; i<devices.length(); i++)
+		form.add_list_item(f_soundcard, devices[i]);
+		
 	f_render = form.create_button("&render to wav");
 	f_stop = form.create_button("s&top any playing audio");
 	f_exit = form.create_button("e&xit", false, true);
 	form.focus(f_script);
 }
 
+sound@[] g_sounds;
+enum sound_flags { SOUND_LOOPING, SOUND_PAUSED }
+sound@ play(const string&in filename, int64 flags = 0, double pitch = 100) {
+	sound s;
+	if (!s.load("audio/" + filename + ".ogg")) return null;
+	s.pitch = pitch;
+	if (flags & SOUND_PAUSED == 0)
+		flags & SOUND_LOOPING > 0? s.play_looped() : s.play();
+	for (uint i = 0; i < g_sounds.length(); i++) {
+		if (g_sounds[i].playing or g_sounds[i].paused) continue;
+		g_sounds.remove_at(i);
+		i--;
+	}
+	g_sounds.insert_last(s);
+	return s;
+}
+
+// --- Main ---
 void main() {
 	async<void>(socket_thread);
 	speak("connecting...");
@@ -186,9 +331,12 @@ void main() {
 			} else break;
 		} else if (@result != null and result.size() == 0) break;
 	}
+	
 	setup_interface();
+	
 	while(!form.is_pressed(f_exit)) {
 		wait(5);
+		
 		if (form.get_current_focus() == f_script and (keyboard_modifiers & KEYMOD_CTRL) != 0) {
 			int dir = -100;
 			if (key_pressed(KEY_UP)) dir = -1;
@@ -208,6 +356,7 @@ void main() {
 				if (!line_text.starts_with(";")) starspeak(line_text);
 			}
 		}
+		
 		if (form.get_current_focus() == f_voices) {
 			if (keyboard_modifiers & KEYMOD_CTRL > 0 && key_pressed(KEY_C)) {
 				clipboard_set_text(form.get_list_item(f_voices, form.get_list_position(f_voices)));
@@ -215,10 +364,12 @@ void main() {
 			}
 			if (key_pressed(KEY_SPACE)) starspeak(form.get_list_item(f_voices, form.get_list_position(f_voices)) + ": Hello there, my name is " + form.get_list_item(f_voices, form.get_list_position(f_voices)));
 		}
+		
 		if (form.get_current_focus() == f_soundcard and old_soundcard!=form.get_list_position(f_soundcard)) {
 			old_soundcard=form.get_list_position(f_soundcard);
 			sound_output_device=old_soundcard;
 		}
+		
 		if (form.get_current_focus() == f_quickspeak and keyboard_modifiers & KEYMOD_CTRL == 0 and keyboard_modifiers & KEYMOD_SHIFT == 0) {
 			if (key_pressed(KEY_RETURN)) {
 				string text = form.get_text(f_quickspeak);
@@ -227,22 +378,24 @@ void main() {
 				else speak("Select a voice, type text and press enter to speak it");
 			}
 		}
+		
 		form.monitor();
+		
 		if (form.is_pressed(f_stop)) {
 			if (demo.playing) demo.stop();
 		}
+		
 		if (form.is_pressed(f_render)) {
-			if (item_count > 0) {
-				speak("Rendering in progress, will add canceling ability soon");
-				continue;
-			}
 			string text = form.get_text(f_script).trim_whitespace_this();
-			if (!text.empty()) send_request(text, true);
+			if (!text.empty()) speak("Rendering not supported in this version.");
 		}
+		
 		string audio = audio_queue.dequeue_message();
 		if (!audio.empty()) handle_audio(audio);
+		
 		json_object@ msg = recv_queue.dequeue_message();
 		if (@msg == null) continue;
+		
 		if (msg.exists("voices")) {
 			play("ready");
 			json_array@ v = msg["voices"];
@@ -257,16 +410,18 @@ void main() {
 			}
 			int old_index=form.get_list_position(f_voices);
 			form.clear_list(f_voices);
-			for (uint i = 0; i < v.length(); i++) form.add_list_item(f_voices, v[i]);
+			for (uint i = 0; i < v.length(); i++) {
+				string v_name = "";
+				if (v[i].get_is_string()) v_name = string(v[i]);
+				else if (v.is_object(i)) {
+					json_object@ v_obj = v[i];
+					if (v_obj.exists("name")) v_name = string(v_obj["name"]);
+				}
+				if (!v_name.empty()) form.add_list_item(f_voices, v_name);
+			}
 			if (old_index<form.get_list_count(f_voices)) form.set_list_position(f_voices,old_index);
 		} else if (msg.exists("warning") or msg.exists("status")) {
 			play("warning");
-			if (item_count > 0) render_count++;
-			if (render_count == item_count and item_count > 0) {
-				play("complete");
-				form.set_caption(f_render, "&Render to wav");
-				item_count = render_count = 0;
-			}
 			if (msg.exists("warning")) speak(msg["warning"], false);
 			else if (msg.exists("status")) speak(msg["status"], false);
 		} else if (msg.exists("error")) {
@@ -275,21 +430,4 @@ void main() {
 		}
 	}
 	program_exit = true;
-}
-
-sound@[] g_sounds;
-enum sound_flags { SOUND_LOOPING, SOUND_PAUSED }
-sound@ play(const string&in filename, int64 flags = 0, double pitch = 100) {
-	sound s;
-	if (!s.load("audio/" + filename + ".ogg")) return null;
-	s.pitch = pitch;
-	if (flags & SOUND_PAUSED == 0)
-		flags & SOUND_LOOPING > 0? s.play_looped() : s.play();
-	for (uint i = 0; i < g_sounds.length(); i++) {
-		if (g_sounds[i].playing or g_sounds[i].paused) continue;
-		g_sounds.remove_at(i);
-		i--;
-	}
-	g_sounds.insert_last(s);
-	return s;
 }
