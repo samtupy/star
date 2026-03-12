@@ -1,4 +1,4 @@
-package com.star.provider.ui.theme
+package com.samtupy.starprovider.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

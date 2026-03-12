@@ -1,4 +1,4 @@
-package com.star.provider
+package com.samtupy.starprovider
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -41,7 +41,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.pow
-import com.star.provider.R
+import com.samtupy.starprovider.R
 
 
 interface ServiceStateListener {
@@ -725,7 +725,7 @@ class StarProviderService : Service() {
 		stateListeners.clear(); logListeners.clear()
 	}
 
-	companion object { const val EXTRA_SERVER_URLS = "com.star.provider.EXTRA_SERVER_URLS" }
+	companion object { const val EXTRA_SERVER_URLS = "com.samtupy.starprovider.EXTRA_SERVER_URLS" }
 	private fun isTtsReady(): Boolean = ttsInitializedEngines.isNotEmpty() || activeStarVoices.isNotEmpty()
 	fun isRunning(): Boolean = isServiceCurrentlyRunning
 	fun requestCurrentStatus() { stateListeners.forEach { it.onStatusUpdate(currentStatus, isServiceCurrentlyRunning) } }

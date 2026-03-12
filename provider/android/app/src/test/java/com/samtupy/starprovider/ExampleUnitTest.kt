@@ -1,4 +1,4 @@
-package com.star.provider
+package com.samtupy.starprovider
 
 import org.junit.Test
 

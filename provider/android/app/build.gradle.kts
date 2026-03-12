@@ -13,11 +13,11 @@ plugins {
 }
 
 android {
-    namespace = "com.star.provider"
+    namespace = "com.samtupy.starprovider"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.star.provider"
+        applicationId = "com.samtupy.starprovider"
         minSdk = 32 // Ensure this is appropriate for the APIs used
         targetSdk = 35
         versionCode = 1

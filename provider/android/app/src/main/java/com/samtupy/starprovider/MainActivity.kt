@@ -1,4 +1,4 @@
-package com.star.provider
+package com.samtupy.starprovider
 
 import android.content.ComponentName
 import android.content.Context
@@ -56,18 +56,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
-import com.star.provider.ui.theme.StarProviderTheme
+import com.samtupy.starprovider.ui.theme.StarProviderTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import com.star.provider.ServiceStateListener
-import com.star.provider.ServiceLogListener
-import com.star.provider.PersistedVoiceConfig
-import com.star.provider.DialogVoiceInfo
-import com.star.provider.DialogEngineInfo
+import com.samtupy.starprovider.ServiceStateListener
+import com.samtupy.starprovider.ServiceLogListener
+import com.samtupy.starprovider.PersistedVoiceConfig
+import com.samtupy.starprovider.DialogVoiceInfo
+import com.samtupy.starprovider.DialogEngineInfo
 
 const val PREFS_NAME = "StarProviderPrefs"
 const val KEY_SERVER_URLS = "server_urls"

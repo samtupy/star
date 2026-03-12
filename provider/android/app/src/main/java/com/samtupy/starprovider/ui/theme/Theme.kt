@@ -1,4 +1,4 @@
-package com.star.provider.ui.theme
+package com.samtupy.starprovider.ui.theme
 
 import android.app.Activity
 import android.os.Build
