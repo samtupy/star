@@ -174,7 +174,7 @@ class star_local:
 		atexit.register(self.stop)
 		return True
 	def fail(self, message):
-		wx.CallAfter(wx.MessageDialog(self.client, message, "Local STAR setup Error", wx.OK).ShowModal)
+		wx.CallAfter(lambda: wx.MessageDialog(self.client, message, "Local STAR setup Error", wx.OK).ShowModal())
 		wx.CallAfter(self.client.Close)
 		self.stop()
 		config["host"] = ""
@@ -196,37 +196,49 @@ class star_client_configuration(wx.Dialog):
 	def __init__(self, parent):
 		"""Composes the UI elements for the dialog."""
 		wx.Dialog.__init__(self, parent, title = "STAR Client Configuration")
-		host_label = wx.StaticText(self, -1, "&Host to connect to")
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		sizer.Add(wx.StaticText(self, -1, "&Host to connect to"), 0, wx.ALL, 5)
 		self.host = wx.ComboBox(self, value = config.get("host", ""))
 		self.host.Bind(wx.EVT_COMBOBOX, self.on_host_selection_change)
 		self.host.Bind(wx.EVT_TEXT, self.on_host_text_change)
 		self.host.SetHint("for example ws://username:password@server.com:7774 or the string local")
+		sizer.Add(self.host, 0, wx.EXPAND | wx.ALL, 5)
 		self.delete_host_btn = wx.Button(self, label = "&Delete saved host")
 		self.delete_host_btn.Bind(wx.EVT_BUTTON, self.on_delete_saved_host)
+		sizer.Add(self.delete_host_btn, 0, wx.ALL, 5)
 		render_path_label = wx.StaticText(self, -1, "Default &Render location")
 		self.render_path = wx.DirPickerCtrl(self, path = config.get("render_path", os.path.join(os.getcwd(), "output")), message = "Select a default directory to render output into")
 		render_path_label.Reparent(self.render_path)
-		wx.StaticText(self, -1, "Render &Filename template")
+		sizer.Add(self.render_path, 0, wx.EXPAND | wx.ALL, 5)
+		sizer.Add(wx.StaticText(self, -1, "Render &Filename template"), 0, wx.ALL, 5)
 		self.render_filename_template = wx.TextCtrl(self, value = config.get("render_filename_template", "{counter01}"))
-		wx.StaticText(self, -1, "Render Filename template tokens &information")
-		wx.TextCtrl(self, style = wx.TE_MULTILINE | wx.HSCROLL | wx.TE_READONLY, value = render_filename_tokens_help())
-		wx.StaticText(self, -1, "Amount of sil&ence (in milliseconds) to insert between consolidated speech clips")
+		sizer.Add(self.render_filename_template, 0, wx.EXPAND | wx.ALL, 5)
+		sizer.Add(wx.StaticText(self, -1, "Render Filename template tokens &information"), 0, wx.ALL, 5)
+		sizer.Add(wx.TextCtrl(self, style = wx.TE_MULTILINE | wx.HSCROLL | wx.TE_READONLY, value = render_filename_tokens_help()), 1, wx.EXPAND | wx.ALL, 5)
+		sizer.Add(wx.StaticText(self, -1, "Amount of sil&ence (in milliseconds) to insert between consolidated speech clips"), 0, wx.ALL, 5)
 		self.render_consolidated_silence = wx.SpinCtrl(self, value = config.get("render_consolidated_silence", "200"), max = 5000)
-		wx.StaticText(self, -1, "Voice &preview text")
+		sizer.Add(self.render_consolidated_silence, 0, wx.ALL, 5)
+		sizer.Add(wx.StaticText(self, -1, "Voice &preview text"), 0, wx.ALL, 5)
 		self.voice_preview_text = wx.TextCtrl(self, value = config.get("voice_preview_text", "Hello there, my name is {voice}."))
-		wx.StaticText(self, -1, "&Output Device")
+		sizer.Add(self.voice_preview_text, 0, wx.EXPAND | wx.ALL, 5)
+		sizer.Add(wx.StaticText(self, -1, "&Output Device"), 0, wx.ALL, 5)
 		self.output_devices = wx.ListCtrl(self, style = wx.LC_SINGLE_SEL | wx.LC_REPORT)
 		self.output_devices.AppendColumn("Device name")
 		for d in playsound_devices: self.output_devices.Append([d])
 		device_idx = self.output_devices.FindItem(0, config.get("output_device", "Default"))
 		self.output_devices.Focus(device_idx)
 		self.output_devices.Select(device_idx)
+		sizer.Add(self.output_devices, 1, wx.EXPAND | wx.ALL, 5)
 		self.clear_output_on_render = wx.CheckBox(self, label = "Clear Output &subdirectory on render")
 		self.clear_output_on_render.Value = config.as_bool("clear_output_on_render") if "clear_output_on_render" in config else True
+		sizer.Add(self.clear_output_on_render, 0, wx.ALL, 5)
 		self.clear_cache_btn = wx.Button(self, label = "&Clear audio cache")
 		self.clear_cache_btn.Bind(wx.EVT_BUTTON, self.on_clear_cache)
 		self.clear_cache_btn.Enabled = hasattr(parent, "speech_cache") and len(parent.speech_cache) > 0
-		self.CreateButtonSizer(wx.OK | wx.CANCEL)
+		sizer.Add(self.clear_cache_btn, 0, wx.ALL, 5)
+		sizer.Add(self.CreateButtonSizer(wx.OK | wx.CANCEL), 0, wx.EXPAND | wx.ALL, 5)
+		self.SetSizer(sizer)
+		sizer.Fit(self)
 		self.Bind(wx.EVT_INIT_DIALOG, self.on_show)
 	def on_show(self, evt):
 		device_idx = self.output_devices.FindItem(0, config.get("output_device", "Default"))
@@ -561,7 +573,9 @@ class star_client(wx.Frame):
 		self.render_progress.Hide()
 	def on_run_local(self, evt):
 		"""If this button is clicked from the connection panel, spin up a local STAR stack and initiate a connection to it."""
-		if self.local: return wx.MessageDialog(self, "Already attempting to establish local setup", "error", wx.OK)
+		if self.local:
+			wx.MessageDialog(self, "Already attempting to establish local setup", "Error", wx.OK).ShowModal()
+			return
 		config["host"] = "local"
 		config.write()
 		self.reconnect()
